@@ -138,6 +138,9 @@ defmodule Legion.AIAgent do
       # due to Dune's behaviour check using Keyword.get instead of get_values)
       use Dune.Allowlist, extend: Dune.Allowlist.Default
 
+      # Allow Vault.get for tool options access
+      # allow(Vault, only: [:get])
+
       unquote_splicing(allow_statements)
 
       @behaviour Legion.AIAgent

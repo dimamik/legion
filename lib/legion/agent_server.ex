@@ -197,7 +197,18 @@ defmodule Legion.AgentServer do
     tool_opts =
       tools
       |> Enum.map(fn tool_module ->
-        {tool_module, agent_module.tool_options(tool_module)}
+        opts = agent_module.tool_options(tool_module)
+        # Convert allowed_agents atoms to strings for AgentTool
+        opts =
+          if Map.has_key?(opts, :allowed_agents) and is_list(opts.allowed_agents) do
+            Map.update!(opts, :allowed_agents, fn agents ->
+              Enum.map(agents, &to_string/1)
+            end)
+          else
+            opts
+          end
+
+        {tool_module, opts}
       end)
       |> Enum.into(%{})
 

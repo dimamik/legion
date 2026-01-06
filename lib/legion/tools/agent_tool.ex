@@ -130,5 +130,8 @@ defmodule Legion.Tools.AgentTool do
   end
 
   defp allowed?(_agent_module, :all), do: true
-  defp allowed?(agent_module, allowed_list), do: agent_module in allowed_list
+
+  defp allowed?(agent_module, allowed_list) do
+    to_string(agent_module) in allowed_list
+  end
 end
