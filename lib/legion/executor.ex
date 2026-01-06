@@ -238,13 +238,10 @@ defmodule Legion.Executor do
       fn ->
         # Merge base config with agent's custom sandbox options
         sandbox_opts =
-          [
-            timeout: config.sandbox.timeout,
-            max_heap_size: config.sandbox.max_heap_size
-          ]
+          [timeout: config.sandbox.timeout]
           |> Keyword.merge(agent_module.sandbox_options())
 
-        # Agent module itself implements Dune.Allowlist
+        # Agent module itself implements Legion.Sandbox.Allowlist
         case Sandbox.eval(code, agent_module, sandbox_opts) do
           {:ok, result} -> {:ok, result}
           {:error, error} -> {:error, error}

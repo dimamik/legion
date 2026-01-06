@@ -43,7 +43,6 @@ defmodule Legion.MixProject do
   defp deps do
     [
       {:req_llm, "~> 1.2"},
-      {:dune, "~> 0.3"},
       {:vault, "~> 0.2"},
       {:telemetry, "~> 1.0"},
       {:jason, "~> 1.4"},

@@ -1,6 +1,6 @@
 defmodule Legion.Test.ProductResearch.Agents.ProductCoordinatorAgent do
   @moduledoc """
-  Coordinates product research by delegating to specialized sub-agents. Always calls tools to gather information.
+  Coordinates product research by delegating to specialized sub-agents. Always calls Legion tools to gather information instead of relying on internal knowledge. Try to execute tool calls via code as much as possible.
 
   Example:
   ```

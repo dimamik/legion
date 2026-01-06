@@ -32,7 +32,8 @@ defmodule Legion.Test.ProductResearch.Tools.WebScraperTool do
     search_url = "https://html.duckduckgo.com/html/?q=#{encoded_query}"
 
     headers = [
-      {"User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+      {"User-Agent",
+       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
       {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
       {"Accept-Language", "en-US,en;q=0.5"}
     ]
@@ -86,16 +87,18 @@ defmodule Legion.Test.ProductResearch.Tools.WebScraperTool do
     snippets = Regex.scan(snippet_pattern, html)
 
     # Pad snippets list to match links length
-    padded_snippets = snippets ++ List.duplicate(["", ""], max(0, length(links) - length(snippets)))
+    padded_snippets =
+      snippets ++ List.duplicate(["", ""], max(0, length(links) - length(snippets)))
 
     links
     |> Enum.zip(padded_snippets)
     |> Enum.take(limit)
     |> Enum.map(fn {[_, url, title], snippet_match} ->
-      snippet = case snippet_match do
-        [_, text] -> String.trim(text)
-        _ -> ""
-      end
+      snippet =
+        case snippet_match do
+          [_, text] -> String.trim(text)
+          _ -> ""
+        end
 
       # DuckDuckGo uses redirect URLs, extract actual URL from uddg param
       # URL is HTML-encoded, so decode &amp; to &

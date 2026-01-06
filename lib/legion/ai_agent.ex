@@ -134,9 +134,8 @@ defmodule Legion.AIAgent do
       end)
 
     quote do
-      # Make this agent module itself a Dune allowlist (must come first
-      # due to Dune's behaviour check using Keyword.get instead of get_values)
-      use Dune.Allowlist, extend: Dune.Allowlist.Default
+      # Make this agent module itself an allowlist for the sandbox
+      use Legion.Sandbox.Allowlist, extend: Legion.Sandbox.DefaultAllowlist
 
       # Allow Vault.get for tool options access
       # allow(Vault, only: [:get])

@@ -14,7 +14,7 @@ defmodule Legion.Integration.ProductResearch.ProductResearchTest do
   test "researches a product using multiple agents" do
     with_api_key do
       task =
-        "Research 'Legion' elixir library. Find pros, cons, and alternatives. Include source links to back up your findings."
+        "Research 'Sony WH-1000XM5' headphones. Find pros, cons, and alternatives. Include source links to back up your findings."
 
       result = Legion.call(ProductCoordinatorAgent, task, timeout: 300_000)
 

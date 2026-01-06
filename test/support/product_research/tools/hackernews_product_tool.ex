@@ -5,7 +5,9 @@ defmodule Legion.Test.ProductResearch.Tools.HackerNewsProductTool do
   @doc "Searches HackerNews posts. Returns list of maps with :title, :url, :score, :num_comments, :object_id."
   def search_product(product_name, limit \\ 15) do
     encoded_query = URI.encode(product_name)
-    search_url = "https://hn.algolia.com/api/v1/search?query=#{encoded_query}&tags=story&hitsPerPage=#{limit}"
+
+    search_url =
+      "https://hn.algolia.com/api/v1/search?query=#{encoded_query}&tags=story&hitsPerPage=#{limit}"
 
     case Req.get(search_url) do
       {:ok, %{status: 200, body: %{"hits" => hits}}} ->

@@ -8,7 +8,9 @@ defmodule Legion.Test.ProductResearch.Tools.RedditProductTool do
   def search_product(product_name, subreddits \\ @default_subreddits, limit \\ 15) do
     encoded_query = URI.encode(product_name)
     subreddit_str = Enum.join(subreddits, "+")
-    search_url = "https://www.reddit.com/r/#{subreddit_str}/search.json?q=#{encoded_query}&restrict_sr=1&limit=100&sort=relevance"
+
+    search_url =
+      "https://www.reddit.com/r/#{subreddit_str}/search.json?q=#{encoded_query}&restrict_sr=1&limit=100&sort=relevance"
 
     headers = [{"User-Agent", "Legion Product Research Bot 1.0"}]
 
@@ -57,6 +59,7 @@ defmodule Legion.Test.ProductResearch.Tools.RedditProductTool do
 
   defp extract_comment_text(%{"data" => data}) do
     body = data["body"] || ""
+
     if String.length(body) > 0 and body != "[deleted]" and body != "[removed]" do
       body
     else
