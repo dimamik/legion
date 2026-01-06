@@ -1,20 +1,8 @@
 defmodule Legion.Test.ProductResearch.Tools.WebScraperTool do
-  @moduledoc """
-  Tool for general web scraping to fetch product information from any URL.
-  Uses DuckDuckGo HTML search for finding relevant pages.
-  """
+  @moduledoc "Web scraping using DuckDuckGo search."
   use Legion.Tool
 
-  @doc """
-  Fetches and extracts text content from a URL.
-
-  ## Parameters
-    - url: The URL to fetch
-
-  ## Returns
-  A map with :url, :title, :text_content, :status fields.
-  Returns a map with :error field on failure.
-  """
+  @doc "Fetches page content. Returns map with :url, :title, :text_content, :status."
   def fetch_page(url) do
     headers = [
       {"User-Agent", "Mozilla/5.0 (compatible; Legion Research Bot 1.0)"},
@@ -38,16 +26,7 @@ defmodule Legion.Test.ProductResearch.Tools.WebScraperTool do
     end
   end
 
-  @doc """
-  Searches the web using DuckDuckGo HTML and returns results.
-
-  ## Parameters
-    - query: The search query
-    - limit: Maximum number of results to return (default: 10)
-
-  ## Returns
-  A list of maps with :title, :url, :snippet fields.
-  """
+  @doc "Searches with DuckDuckGo. Returns list of maps with :title, :url, :snippet."
   def search_web(query, limit \\ 10) do
     encoded_query = URI.encode(query)
     search_url = "https://html.duckduckgo.com/html/?q=#{encoded_query}"

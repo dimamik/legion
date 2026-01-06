@@ -1,29 +1,10 @@
 defmodule Legion.Test.ProductResearch.Tools.RedditProductTool do
-  @moduledoc """
-  Tool for searching Reddit for product-related posts and comments.
-  Uses Reddit's JSON API for data fetching.
-  """
+  @moduledoc "Searches Reddit for product posts and comments."
   use Legion.Tool
 
   @default_subreddits ["technology", "gadgets", "BuyItForLife", "ProductReviews"]
 
-  @doc """
-  Searches Reddit for posts mentioning the given product name.
-
-  ## Parameters
-    - product_name: The name of the product to search for
-    - subreddits: List of subreddits to search (default: ["technology", "gadgets", "BuyItForLife", "ProductReviews"])
-    - limit: Maximum number of posts to return (default: 15)
-
-  ## Returns
-  A list of maps with :title, :url, :score, :selftext, :subreddit, :num_comments, :permalink, and :source fields.
-
-  ## Examples
-
-      search_product("Sony headphones")
-      search_product("Sony headphones", ["headphones", "audiophile"])
-      search_product("Sony headphones", ["headphones", "audiophile"], 25)
-  """
+  @doc "Searches Reddit. Returns list of maps with :title, :url, :score, :selftext, :subreddit, :permalink."
   def search_product(product_name, subreddits \\ @default_subreddits, limit \\ 15) do
     encoded_query = URI.encode(product_name)
     subreddit_str = Enum.join(subreddits, "+")
@@ -53,16 +34,7 @@ defmodule Legion.Test.ProductResearch.Tools.RedditProductTool do
     end
   end
 
-  @doc """
-  Fetches comments from a Reddit post.
-
-  ## Parameters
-    - permalink: The Reddit post permalink (e.g., "/r/technology/comments/abc123/title/")
-    - limit: Maximum number of comments to return (default: 25)
-
-  ## Returns
-  A list of comment text strings.
-  """
+  @doc "Fetches comments from a Reddit post. Returns list of comment text strings."
   def fetch_comments(permalink, limit \\ 25) do
     # Clean up permalink and construct URL
     clean_permalink = String.trim_leading(permalink, "/")

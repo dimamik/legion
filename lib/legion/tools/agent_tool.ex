@@ -37,14 +37,14 @@ defmodule Legion.Tools.AgentTool do
 
   ## Returns
     - `{:ok, result}` - Agent completed successfully
-    - `{:error, :agent_not_allowed}` - Agent not in allowed list
+    - `{:error, message}` - Agent not in allowed list (message includes allowed agents)
     - `{:cancel, reason}` - Agent was cancelled
 
   ## Example
 
       Legion.Tools.AgentTool.call(MyApp.WorkerAgent, "Process this data")
   """
-  @spec call(module(), String.t()) :: {:ok, any()} | {:error, atom()} | {:cancel, atom()}
+  @spec call(module(), String.t()) :: {:ok, any()} | {:error, String.t()} | {:cancel, atom()}
   def call(agent_module, task) do
     opts = Vault.get(__MODULE__, %{})
     allowed = Map.get(opts, :allowed_agents, :all)
@@ -52,7 +52,8 @@ defmodule Legion.Tools.AgentTool do
     if allowed?(agent_module, allowed) do
       Legion.call(agent_module, task)
     else
-      {:error, :agent_not_allowed}
+      allowed_str = if allowed == :all, do: "all", else: Enum.join(allowed, ", ")
+      {:error, "Agent #{inspect(agent_module)} is not allowed. Allowed agents: #{allowed_str}"}
     end
   end
 
@@ -68,13 +69,13 @@ defmodule Legion.Tools.AgentTool do
 
   ## Returns
     - `{:ok, pid}` - Agent started successfully
-    - `{:error, :agent_not_allowed}` - Agent not in allowed list
+    - `{:error, message}` - Agent not in allowed list (message includes allowed agents)
 
   ## Example
 
       {:ok, pid} = Legion.Tools.AgentTool.start(MyApp.AssistantAgent, "Initialize")
   """
-  @spec start(module(), String.t()) :: {:ok, pid()} | {:error, atom()}
+  @spec start(module(), String.t()) :: {:ok, pid()} | {:error, String.t()}
   def start(agent_module, initial_task) do
     opts = Vault.get(__MODULE__, %{})
     allowed = Map.get(opts, :allowed_agents, :all)
@@ -82,7 +83,8 @@ defmodule Legion.Tools.AgentTool do
     if allowed?(agent_module, allowed) do
       Legion.start_link(agent_module, initial_task)
     else
-      {:error, :agent_not_allowed}
+      allowed_str = if allowed == :all, do: "all", else: Enum.join(allowed, ", ")
+      {:error, "Agent #{inspect(agent_module)} is not allowed. Allowed agents: #{allowed_str}"}
     end
   end
 
