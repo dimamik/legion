@@ -132,9 +132,6 @@ defmodule Legion.AIAgent do
       # Make this agent module itself an allowlist for the sandbox
       use Legion.Sandbox.Allowlist, extend: Legion.Sandbox.DefaultAllowlist
 
-      # Allow Vault.get for tool options access
-      # allow(Vault, only: [:get])
-
       unquote_splicing(allow_statements)
 
       @behaviour Legion.AIAgent
