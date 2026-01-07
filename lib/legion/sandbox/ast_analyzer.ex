@@ -121,18 +121,20 @@ defmodule Legion.Sandbox.ASTAnalyzer do
   @doc """
   Analyzes the AST and returns :ok if safe, or {:error, reason} if forbidden calls are found.
   """
-  @spec analyze(Macro.t(), module()) :: :ok | {:error, map()}
-  def analyze(ast, allowlist_module) do
-    case do_analyze(ast, allowlist_module, []) do
+  @spec analyze(Macro.t(), module(), keyword()) :: :ok | {:error, map()}
+  def analyze(ast, allowlist_module, opts \\ []) do
+    aliases = Keyword.get(opts, :aliases, []) |> Map.new()
+
+    case do_analyze(ast, allowlist_module, aliases, []) do
       [] -> :ok
       [error | _] -> {:error, error}
     end
   end
 
-  defp do_analyze(ast, allowlist_module, errors) do
+  defp do_analyze(ast, allowlist_module, aliases, errors) do
     {_ast, errors} =
       Macro.prewalk(ast, errors, fn node, acc ->
-        case check_node(node, allowlist_module) do
+        case check_node(node, allowlist_module, aliases) do
           :ok -> {node, acc}
           {:error, reason} -> {node, [reason | acc]}
         end
@@ -142,8 +144,9 @@ defmodule Legion.Sandbox.ASTAnalyzer do
   end
 
   # Check remote calls: Module.function(args)
-  defp check_node({{:., _meta, [module, function]}, _call_meta, args}, allowlist_module)
+  defp check_node({{:., _meta, [module, function]}, _call_meta, args}, allowlist_module, aliases)
        when is_atom(module) and is_atom(function) do
+    module = Map.get(aliases, module, module)
     arity = length(args)
     check_mfa(module, function, arity, allowlist_module)
   end
@@ -151,10 +154,12 @@ defmodule Legion.Sandbox.ASTAnalyzer do
   # Check remote calls with aliased modules: {:__aliases__, _, [:Module]}
   defp check_node(
          {{:., _meta, [{:__aliases__, _, module_parts}, function]}, _call_meta, args},
-         allowlist_module
+         allowlist_module,
+         aliases
        )
        when is_atom(function) do
     module = Module.concat(module_parts)
+    module = Map.get(aliases, module, module)
     arity = length(args)
     check_mfa(module, function, arity, allowlist_module)
   end
@@ -162,9 +167,11 @@ defmodule Legion.Sandbox.ASTAnalyzer do
   # Check function captures: &Module.function/arity
   defp check_node(
          {:&, _meta, [{:/, _, [{{:., _, [module, function]}, _, _}, arity]}]},
-         allowlist_module
+         allowlist_module,
+         aliases
        )
        when is_atom(module) and is_atom(function) and is_integer(arity) do
+    module = Map.get(aliases, module, module)
     check_mfa(module, function, arity, allowlist_module)
   end
 
@@ -172,53 +179,63 @@ defmodule Legion.Sandbox.ASTAnalyzer do
   defp check_node(
          {:&, _meta,
           [{:/, _, [{{:., _, [{:__aliases__, _, module_parts}, function]}, _, _}, arity]}]},
-         allowlist_module
+         allowlist_module,
+         aliases
        )
        when is_atom(function) and is_integer(arity) do
     module = Module.concat(module_parts)
+    module = Map.get(aliases, module, module)
     check_mfa(module, function, arity, allowlist_module)
   end
 
   # Block receive special form
-  defp check_node({:receive, _meta, _args}, _allowlist_module) do
+  defp check_node({:receive, _meta, _args}, _allowlist_module, _aliases) do
     {:error, %{type: :restricted, message: "receive blocks are not allowed in sandbox"}}
   end
 
   # Block import/require/alias
-  defp check_node({form, _meta, _args}, _allowlist_module) when form in @blocked_special_forms do
+  defp check_node({form, _meta, _args}, _allowlist_module, _aliases)
+       when form in @blocked_special_forms do
     {:error, %{type: :restricted, message: "#{form} is not allowed in sandbox"}}
   end
 
   # Block definition forms at top level
-  defp check_node({form, _meta, _args}, _allowlist_module) when form in @blocked_definitions do
+  defp check_node({form, _meta, _args}, _allowlist_module, _aliases)
+       when form in @blocked_definitions do
     {:error, %{type: :restricted, message: "#{form} is not allowed in sandbox"}}
   end
 
   # Block local calls to dangerous Kernel functions
-  defp check_node({:spawn, _meta, args}, _allowlist_module) when is_list(args) do
+  defp check_node({:spawn, _meta, args}, _allowlist_module, _aliases) when is_list(args) do
     {:error, %{type: :restricted, message: "spawn is not allowed in sandbox"}}
   end
 
-  defp check_node({:spawn_link, _meta, args}, _allowlist_module) when is_list(args) do
+  defp check_node({:spawn_link, _meta, args}, _allowlist_module, _aliases) when is_list(args) do
     {:error, %{type: :restricted, message: "spawn_link is not allowed in sandbox"}}
   end
 
-  defp check_node({:spawn_monitor, _meta, args}, _allowlist_module) when is_list(args) do
+  defp check_node({:spawn_monitor, _meta, args}, _allowlist_module, _aliases)
+       when is_list(args) do
     {:error, %{type: :restricted, message: "spawn_monitor is not allowed in sandbox"}}
   end
 
-  defp check_node({:send, _meta, args}, _allowlist_module)
+  defp check_node({:send, _meta, args}, _allowlist_module, _aliases)
        when is_list(args) and length(args) == 2 do
     {:error, %{type: :restricted, message: "send is not allowed in sandbox"}}
   end
 
-  defp check_node({:apply, _meta, args}, _allowlist_module)
+  defp check_node({:apply, _meta, args}, _allowlist_module, _aliases)
        when is_list(args) and length(args) in [2, 3] do
     {:error, %{type: :restricted, message: "apply is not allowed in sandbox"}}
   end
 
+  defp check_node({:exit, _meta, args}, _allowlist_module, _aliases)
+       when is_list(args) and length(args) == 1 do
+    {:error, %{type: :restricted, message: "exit is not allowed in sandbox"}}
+  end
+
   # All other nodes are OK at AST level
-  defp check_node(_node, _allowlist_module) do
+  defp check_node(_node, _allowlist_module, _aliases) do
     :ok
   end
 

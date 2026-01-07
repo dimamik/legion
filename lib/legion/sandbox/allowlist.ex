@@ -70,87 +70,85 @@ defmodule Legion.Sandbox.Allowlist do
     end
   end
 
+  @fun_status_quote_ast (quote do
+    @impl Legion.Sandbox.Allowlist
+    def fun_status(module, function, _arity)
+        when is_atom(module) and is_atom(function) do
+      spec()
+      |> Map.get(module)
+      |> evaluate_permission(module, function)
+    end
+
+    defp evaluate_permission(nil, _module, _function), do: :restricted
+    defp evaluate_permission(:all, module, function), do: allow_if_exported(module, function)
+
+    defp evaluate_permission([only: functions], module, function) do
+      allow_if(Enum.member?(functions, function), module, function)
+    end
+
+    defp evaluate_permission([except: functions], module, function) do
+      reject_if(Enum.member?(functions, function), module, function)
+    end
+
+    defp evaluate_permission(_unsupported, _module, _function), do: :restricted
+
+    defp allow_if(true, module, function), do: allow_if_exported(module, function)
+    defp allow_if(false, _module, _function), do: :restricted
+
+    defp reject_if(true, _module, _function), do: :restricted
+    defp reject_if(false, module, function), do: allow_if_exported(module, function)
+
+    defp allow_if_exported(module, function) do
+      case function_exists?(module, function) do
+        true -> :allowed
+        false -> :restricted
+      end
+    end
+
+    # Check if function exists with any arity
+    defp function_exists?(module, function) do
+      case Code.ensure_loaded(module) do
+        {:module, _} ->
+          module.__info__(:functions)
+          |> Keyword.keys()
+          |> Enum.member?(function)
+
+        _ ->
+          false
+      end
+    end
+  end)
+
   defmacro __before_compile__(env) do
     entries = Module.get_attribute(env.module, :allowlist_entries) || []
     extend_module = Module.get_attribute(env.module, :extend_module)
 
-    # Build the spec map
-    base_spec =
-      if extend_module do
-        quote do: unquote(extend_module).spec()
-      else
-        quote do: %{}
-      end
-
-    # Generate the spec/0 function
-    spec_quote =
-      quote do
-        @impl Legion.Sandbox.Allowlist
-        def spec do
-          base = unquote(base_spec)
-
-          entries =
-            unquote(Macro.escape(entries))
-            |> Enum.reduce(%{}, fn {module, opts}, acc ->
-              Map.put(acc, module, opts)
-            end)
-
-          Map.merge(base, entries)
-        end
-      end
-
-    # Generate the fun_status/3 function
-    # Note: We check function existence with any arity because:
-    # 1. Pipe operators transform `a |> f(b)` to `f(a, b)` at compile time,
-    #    but we analyze the pre-transformation AST where arity appears as n-1
-    # 2. This is safe since we're just allowing/blocking, not doing runtime checks
-    fun_status_quote =
-      quote do
-        @impl Legion.Sandbox.Allowlist
-        def fun_status(module, function, _arity)
-            when is_atom(module) and is_atom(function) do
-          spec_map = spec()
-
-          case Map.get(spec_map, module) do
-            nil ->
-              :restricted
-
-            :all ->
-              if function_exists?(module, function), do: :allowed, else: :restricted
-
-            [only: functions] ->
-              if function in functions and function_exists?(module, function) do
-                :allowed
-              else
-                :restricted
-              end
-
-            [except: functions] ->
-              if function in functions do
-                :restricted
-              else
-                if function_exists?(module, function), do: :allowed, else: :restricted
-              end
-
-            _ ->
-              :restricted
-          end
-        end
-
-        # Check if function exists with any arity
-        defp function_exists?(module, function) do
-          case Code.ensure_loaded(module) do
-            {:module, _} ->
-              module.__info__(:functions)
-              |> Keyword.keys()
-              |> Enum.member?(function)
-
-            _ ->
-              false
-          end
-        end
-      end
+    spec_quote = build_spec_quote(entries, extend_module)
+    fun_status_quote = @fun_status_quote_ast
 
     [spec_quote, fun_status_quote]
   end
+
+  defp build_spec_quote(entries, extend_module) do
+    base_spec = base_spec_quote(extend_module)
+
+    quote do
+      @impl Legion.Sandbox.Allowlist
+      def spec do
+        base = unquote(base_spec)
+
+        entries =
+          unquote(Macro.escape(entries))
+          |> Enum.reduce(%{}, fn {module, opts}, acc ->
+            Map.put(acc, module, opts)
+          end)
+
+        Map.merge(base, entries)
+      end
+    end
+  end
+
+  defp base_spec_quote(nil), do: quote(do: %{})
+  defp base_spec_quote(module), do: quote(do: unquote(module).spec())
+
 end

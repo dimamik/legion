@@ -77,7 +77,7 @@ end
 ### 3. Run the Agent
 
 ```elixir
-{:ok, result} = Legion.call(MyApp.ResearchAgent, "Find cool Elixir posts about Advent of Code and save them")
+{:ok, result} = Legion.execute(MyApp.ResearchAgent, "Find cool Elixir posts about Advent of Code and save them")
 # => {:ok, "Found 3 relevant posts and saved 2 that met quality criteria."}
 ```
 
@@ -113,7 +113,7 @@ For multi-turn conversations or persistent agents:
 {:ok, pid} = Legion.start_link(MyApp.AssistantAgent, "Help me analyze this data")
 
 # Send follow-up messages
-{:ok, response} = Legion.send_sync(pid, "Now filter for items over $100")
+{:ok, response} = Legion.call(pid, "Now filter for items over $100")
 
 # Or fire-and-forget
 Legion.cast(pid, "Also check the reviews")
@@ -185,7 +185,7 @@ Request human input during agent execution:
 Legion.Tools.HumanTool.ask("Should I proceed with this operation?")
 
 # Your application responds
-Legion.respond(agent_pid, "Yes, proceed")
+Legion.call(agent_pid, {:respond, "Yes, proceed"})
 ```
 
 ## Multi-Agent Systems
@@ -210,9 +210,9 @@ end
 {:ok, research} = AgentTool.call(MyApp.ResearchAgent, "Find info about Elixir 1.18")
 
 # Start a long-lived sub-agent
-{:ok, pid} = AgentTool.start(MyApp.WriterAgent, "Write a blog post")
-AgentTool.send(pid, "Add a section about pattern matching")
-{:ok, draft} = AgentTool.ask(pid, "Show me what you have so far")
+{:ok, pid} = AgentTool.start_link(MyApp.WriterAgent, "Write a blog post")
+AgentTool.cast(pid, "Add a section about pattern matching")
+{:ok, draft} = AgentTool.call(pid, "Show me what you have so far")
 ```
 
 ## Telemetry
@@ -224,6 +224,8 @@ Legion emits telemetry events for observability:
 - `[:legion, :llm, :request, :start | :stop]` - LLM API calls
 - `[:legion, :sandbox, :eval, :start | :stop]` - code evaluation
 - `[:legion, :human, :input_required | :input_received]` - human-in-the-loop
+
+Plus, Legion emits `Req` telemetry events for HTTP requests.
 
 <!-- MDOC -->
 

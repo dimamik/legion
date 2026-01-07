@@ -29,10 +29,10 @@ defmodule Legion do
 
   ## Example
 
-      {:ok, result} = Legion.call(MyApp.DataAgent, "Fetch and summarize https://example.com")
+      {:ok, result} = Legion.execute(MyApp.DataAgent, "Fetch and summarize https://example.com")
   """
-  @spec call(module(), String.t(), keyword()) :: {:ok, any()} | {:cancel, atom()}
-  def call(agent_module, task, opts \\ []) do
+  @spec execute(module(), String.t(), keyword()) :: {:ok, any()} | {:cancel, atom()}
+  def execute(agent_module, task, opts \\ []) do
     Executor.run(agent_module, task, opts)
   end
 
@@ -47,7 +47,7 @@ defmodule Legion do
     - initial_task: The initial task to start with
     - opts: Optional configuration and GenServer options
       - `:name` - GenServer name registration
-      - Plus any Legion.call/3 options
+      - Plus any Legion.execute/3 options
 
   ## Returns
     - `{:ok, pid}` - Agent started successfully
@@ -88,45 +88,27 @@ defmodule Legion do
   Sends a synchronous message to a long-lived agent.
 
   Waits for the agent to process the message and return a result.
+  Can also be used to provide a human response using `{:respond, response}`.
 
   ## Parameters
     - agent: The agent pid or registered name
-    - message: The message to send
+    - message: The message to send (String or `{:respond, response}`)
     - timeout: Optional timeout in ms (default: 30_000)
 
   ## Returns
     - `{:ok, result}` - Agent responded with result
     - `{:cancel, reason}` - Agent hit limits
+    - `:ok` - Response delivered (when using `{:respond, response}`)
+    - `{:error, :no_pending_request}` - No pending human input request (when using `{:respond, response}`)
 
   ## Example
 
-      {:ok, response} = Legion.send_sync(agent_pid, "What did you find?")
+      {:ok, response} = Legion.call(agent_pid, "What did you find?")
+      :ok = Legion.call(agent_pid, {:respond, "Yes, proceed"})
   """
-  @spec send_sync(GenServer.server(), String.t(), timeout()) :: {:ok, any()} | {:cancel, atom()}
-  def send_sync(agent, message, timeout \\ 30_000) do
+  @spec call(GenServer.server(), String.t() | {:respond, any()}, timeout()) ::
+          {:ok, any()} | {:cancel, atom()} | :ok | {:error, atom()}
+  def call(agent, message, timeout \\ 30_000) do
     AgentServer.call(agent, message, timeout)
-  end
-
-  @doc """
-  Responds to a human-in-the-loop request.
-
-  When an agent uses the HumanTool to request input, this function
-  provides the response.
-
-  ## Parameters
-    - agent: The agent pid or registered name
-    - response: The response to provide
-
-  ## Returns
-    - `:ok` - Response delivered
-    - `{:error, :no_pending_request}` - No pending human input request
-
-  ## Example
-
-      Legion.respond(agent_pid, "Yes, proceed with the operation")
-  """
-  @spec respond(GenServer.server(), any()) :: :ok | {:error, :no_pending_request}
-  def respond(agent, response) do
-    AgentServer.respond(agent, response)
   end
 end

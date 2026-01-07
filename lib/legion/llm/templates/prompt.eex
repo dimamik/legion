@@ -8,36 +8,12 @@ You are an AI agent that accomplishes tasks by writing Elixir code. Your code ru
 
 <%= for tool <- @tools do %><%= tool %><% end %>
 <% end %>
-# Response Format
 
-Respond with JSON in one of these formats:
-
-1. **Execute code and continue**:
-```json
-{"action": "eval_and_continue", "code": "YourCode.here()"}
-```
-
-2. **Execute code and return result**:
-```json
-{"action": "eval_and_complete", "code": "YourCode.here()"}
-```
-
-3. **Return result directly**:
-```json
-{"action": "return", "result": {"your": "result"}}
-```
-
-4. **Done** (no result needed):
-```json
-{"action": "done"}
-```
-<%= @output_schema %>
 # Code Execution Rules
 
 - Code runs in a sandbox with only the tools listed above available
 - No shared state between executions
 - Errors are returned so you can retry with corrected code
-- Use full module names (e.g., `MyTool.fetch(url)`)
 <%= if @custom_instructions do %>
 # Additional Instructions
 

@@ -2,7 +2,6 @@
 
 ### New 🔥
 
-
 - Initial release of Legion - an Elixir-native agentic AI framework
 - `Legion.AIAgent` behaviour for building AI agents with customizable tools and configurations
 - `Legion.Tool` behaviour for defining tools that agents can use

@@ -73,6 +73,12 @@ defmodule Legion.SandboxTest do
                Sandbox.eval("defmodule Foo do end", Legion.Sandbox.DefaultAllowlist)
     end
 
+    test "restricts unknown modules" do
+      # Req is available in the project but not in DefaultAllowlist
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval("Req.get!(\"https://example.com\")", Legion.Sandbox.DefaultAllowlist)
+    end
+
     test "times out on infinite loops" do
       assert {:error, %{type: :timeout}} =
                Sandbox.eval(
@@ -138,6 +144,70 @@ defmodule Legion.SandboxTest do
     test "restricts captures of forbidden functions" do
       assert {:error, %{type: :restricted}} =
                Sandbox.eval("&File.read/1", Legion.Sandbox.DefaultAllowlist)
+    end
+  end
+
+  describe "security restrictions" do
+    test "restricts process interaction modules" do
+      for module <- ["Node", "Port", "Agent", "GenServer", "Supervisor", "Task"] do
+        assert {:error, %{type: :restricted}} =
+                 Sandbox.eval(
+                   "#{module}.start_link(fn -> :ok end)",
+                   Legion.Sandbox.DefaultAllowlist
+                 ),
+               "Failed to restrict #{module}"
+      end
+    end
+
+    test "restricts process termination" do
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval("exit(:normal)", Legion.Sandbox.DefaultAllowlist)
+    end
+
+    test "restricts internal alias" do
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval(
+                 "alias Enum, as: E; E.map([1], & &1)",
+                 Legion.Sandbox.DefaultAllowlist
+               )
+    end
+
+    test "restricts import" do
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval("import Enum; map([1], & &1)", Legion.Sandbox.DefaultAllowlist)
+    end
+
+    test "restricts require" do
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval("require Integer", Legion.Sandbox.DefaultAllowlist)
+    end
+  end
+
+  describe "eval/3 with aliases" do
+    test "injects aliases into the sandbox" do
+      code = """
+      MyEnum.map([1, 2], fn x -> x * 2 end)
+      """
+
+      # Use Enum aliased as MyEnum
+      assert {:ok, [2, 4]} =
+               Sandbox.eval(code, Legion.Sandbox.DefaultAllowlist, aliases: [{MyEnum, Enum}])
+    end
+  end
+
+  describe "supported language features" do
+    test "supports sigils" do
+      # ~D creates a Date struct
+      assert {:ok, %Date{year: 2023, month: 1, day: 1}} =
+               Sandbox.eval("~D[2023-01-01]", Legion.Sandbox.DefaultAllowlist)
+    end
+
+    test "supports pipe operator" do
+      assert {:ok, 3} = Sandbox.eval("1 |> Kernel.+(2)", Legion.Sandbox.DefaultAllowlist)
+    end
+
+    test "supports range operator" do
+      assert {:ok, 1..3} = Sandbox.eval("1..3", Legion.Sandbox.DefaultAllowlist)
     end
   end
 end

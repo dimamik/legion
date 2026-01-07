@@ -13,12 +13,13 @@ defmodule Legion.Integration.ProductResearch.ProductResearchTest do
   test "researches a product using multiple agents" do
     with_api_key do
       task =
-        "Research 'iPhone 16 Pro'. Find pros, cons, and alternatives. Include source links to back up your findings."
+        "Research dishwasher-safe silicone kitchen tongs. Give me top models with their pros and cons. Include source links to back up your findings."
 
-      result = Legion.call(ProductCoordinatorAgent, task, timeout: 300_000)
+      result = Legion.execute(ProductCoordinatorAgent, task, timeout: 300_000)
 
       assert {:ok, %{"response" => response}} = result
-      IO.inspect(response)
+
+      assert "tongs" in String.downcase(response)
     end
   end
 end

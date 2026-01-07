@@ -8,7 +8,7 @@ defmodule Legion.Tools.HumanTool do
   enabling scenarios where human judgment or approval is needed.
 
   When called, the agent execution is suspended until a human provides
-  a response via `Legion.respond/2`.
+  a response via `Legion.call(pid, {:respond, response})`.
 
   ## Configuration
 

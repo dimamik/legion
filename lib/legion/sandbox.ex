@@ -42,7 +42,7 @@ defmodule Legion.Sandbox do
     aliases = Keyword.get(opts, :aliases, [])
 
     with {:ok, ast} <- parse_code(code),
-         :ok <- ASTAnalyzer.analyze(ast, allowlist) do
+         :ok <- ASTAnalyzer.analyze(ast, allowlist, aliases: aliases) do
       ast_with_aliases = inject_aliases(ast, aliases)
       execute_with_timeout(ast_with_aliases, timeout)
     end

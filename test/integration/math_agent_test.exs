@@ -9,7 +9,7 @@ defmodule Legion.Integration.MathAgentTest do
 
   test "MathAgent can solve a calculation using tools" do
     with_api_key do
-      result = Legion.call(MathAgent, "Calculate 500212 + 3123121 using the add function")
+      result = Legion.execute(MathAgent, "Calculate 500212 + 3123121 using the add function")
 
       case result do
         {:ok, value} ->

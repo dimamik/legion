@@ -4,10 +4,10 @@ defmodule Legion.Test.ProductResearch.Agents.ProductCoordinatorAgent do
 
   Example workflow:
   ```
-  {:ok, hn_result} = Legion.Tools.AgentTool.call(HackerNewsProductAgent, "<product> reviews")
-  {:ok, reddit_result} = Legion.Tools.AgentTool.call(RedditProductAgent, "<product> opinions")
-  {:ok, web_result} = Legion.Tools.AgentTool.call(WebResearchAgent, "<product> specs and reviews")
-  # Now you have the actual findings from each source to synthesize
+  hn_result = Legion.Tools.AgentTool.call(HackerNewsProductAgent, "<product> reviews")
+  reddit_result = Legion.Tools.AgentTool.call(RedditProductAgent, "<product> opinions")
+  web_result = Legion.Tools.AgentTool.call(WebResearchAgent, "<product> specs and reviews")
+  [hn_result, reddit_result, web_result]
   ```
 
   After gathering results from sub-agents, synthesize their findings into a final summary with PROS, CONS, and ALTERNATIVES sections. The sub-agents return actual content - extract and combine the key insights from each source into your response.

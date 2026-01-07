@@ -93,35 +93,40 @@ defmodule Legion.Executor do
   end
 
   defp setup_vault(agent_module, tools) do
-    # Gather tool options and aliases
-    {tool_opts, all_aliases} =
-      Enum.reduce(tools, {%{}, []}, fn tool_module, {opts_acc, aliases_acc} ->
-        opts = agent_module.tool_options(tool_module)
+    {tool_opts, aliases} = Enum.reduce(tools, {%{}, []}, &accumulate_tool_data(agent_module, &1, &2))
 
-        # Convert allowed_agents atoms to strings for AgentTool
-        opts =
-          if Map.has_key?(opts, :allowed_agents) and is_list(opts.allowed_agents) do
-            Map.update!(opts, :allowed_agents, fn agents ->
-              Enum.map(agents, &to_string/1)
-            end)
-          else
-            opts
-          end
-
-        # Gather aliases if tool implements get_aliases/1
-        tool_aliases =
-          if function_exported?(tool_module, :get_aliases, 1) do
-            tool_module.get_aliases(opts)
-          else
-            []
-          end
-
-        {Map.put(opts_acc, tool_module, opts), aliases_acc ++ tool_aliases}
-      end)
-
-    # Store tool opts and aliases in Vault
     Vault.unsafe_merge(tool_opts)
-    Vault.unsafe_merge(%{__legion_aliases__: all_aliases})
+    Vault.unsafe_merge(%{__legion_aliases__: aliases})
+  end
+
+  defp accumulate_tool_data(agent_module, tool_module, {opts_acc, aliases_acc}) do
+    opts = build_tool_opts(agent_module, tool_module)
+    aliases = collect_aliases(tool_module, opts)
+
+    {Map.put(opts_acc, tool_module, opts), aliases_acc ++ aliases}
+  end
+
+  defp build_tool_opts(agent_module, tool_module) do
+    agent_module
+    |> tool_module_opts(tool_module)
+    |> normalize_allowed_agents()
+  end
+
+  defp tool_module_opts(agent_module, tool_module), do: agent_module.tool_options(tool_module)
+
+  defp normalize_allowed_agents(opts) do
+    case Map.get(opts, :allowed_agents) do
+      agents when is_list(agents) -> Map.put(opts, :allowed_agents, Enum.map(agents, &to_string/1))
+      _ -> opts
+    end
+  end
+
+  defp collect_aliases(tool_module, opts) do
+    if function_exported?(tool_module, :get_aliases, 1) do
+      tool_module.get_aliases(opts)
+    else
+      []
+    end
   end
 
   defp execution_loop(agent_module, context, config) do

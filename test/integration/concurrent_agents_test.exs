@@ -25,9 +25,9 @@ defmodule Legion.Integration.ConcurrentAgentsTest do
       Process.sleep(8_000)
 
       # Send sync messages to verify they maintain separate contexts
-      result1 = Legion.send_sync(agent1, "What was your last calculation?")
-      result2 = Legion.send_sync(agent2, "What was your last calculation?")
-      result3 = Legion.send_sync(agent3, "What was your last calculation?")
+      result1 = Legion.call(agent1, "What was your last calculation?")
+      result2 = Legion.call(agent2, "What was your last calculation?")
+      result3 = Legion.call(agent3, "What was your last calculation?")
 
       # All should respond (or cancel gracefully)
       for result <- [result1, result2, result3] do

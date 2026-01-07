@@ -17,7 +17,7 @@ defmodule Legion.Integration.LongLivedAgentTest do
         )
 
       # Send first sync message
-      result1 = Legion.send_sync(agent_pid, "Calculate 10 + 5")
+      result1 = Legion.call(agent_pid, "Calculate 10 + 5")
 
       case result1 do
         {:ok, value1} ->
@@ -30,7 +30,7 @@ defmodule Legion.Integration.LongLivedAgentTest do
           Process.sleep(5_000)
 
           # Send another sync message that references previous context
-          result2 = Legion.send_sync(agent_pid, "What was the final result?")
+          result2 = Legion.call(agent_pid, "What was the final result?")
 
           case result2 do
             {:ok, value2} ->

@@ -26,42 +26,62 @@ defmodule Legion.Tools.AgentTool do
   use Legion.Tool
 
   @doc """
-  Spawns a one-off agent and waits for the result.
+  Interacts with other agents.
 
-  The agent executes the given task and returns the result.
-  This is a synchronous operation that blocks until complete.
+  Can be used to spawn one-off agents or communicate with running agents.
 
-  ## Parameters
-    - agent_module: The agent module to spawn (must implement Legion.AIAgent)
-    - task: The task string for the agent to execute
+  ## One-off Agent Execution
 
-  ## Returns
-    - `{:ok, result}` - Agent completed successfully
-    - `{:error, message}` - Agent not in allowed list (message includes allowed agents)
-    - `{:cancel, reason}` - Agent was cancelled
-
-  ## Example
+  Spawns a new agent, executes the task, and returns the result.
 
       Legion.Tools.AgentTool.call(MyApp.WorkerAgent, "Process this data")
+
+  **Parameters:**
+  - `agent_module`: The agent module to spawn (must implement Legion.AIAgent)
+  - `task`: The task string for the agent to execute
+
+  **Returns:**
+  - `{:ok, result}` - Agent completed successfully
+  - `{:error, message}` - Agent not in allowed list
+  - `{:cancel, reason}` - Agent was cancelled
+
+  ## Long-lived Agent Communication
+
+  Sends a synchronous message to a running agent and waits for a response.
+
+      Legion.Tools.AgentTool.call(agent_pid, "What is the status?")
+
+  **Parameters:**
+  - `pid`: The agent process identifier
+  - `message`: The message to send
+
+  **Returns:**
+  - `{:ok, result}` - Agent responded with result
+  - `{:cancel, reason}` - Agent was cancelled
   """
   @spec call(module(), String.t()) :: {:ok, any()} | {:error, String.t()} | {:cancel, atom()}
-  def call(agent_module, task) do
+  def call(agent_module, task) when is_atom(agent_module) do
     opts = Vault.get(__MODULE__, %{})
     allowed = Map.get(opts, :allowed_agents, :all)
 
     if allowed?(agent_module, allowed) do
-      Legion.call(agent_module, task)
+      Legion.execute(agent_module, task)
     else
       allowed_str = if allowed == :all, do: "all", else: Enum.join(allowed, ", ")
       {:error, "Agent #{inspect(agent_module)} is not allowed. Allowed agents: #{allowed_str}"}
     end
   end
 
+  @spec call(pid(), String.t()) :: {:ok, any()} | {:cancel, atom()}
+  def call(pid, message) when is_pid(pid) do
+    Legion.call(pid, message)
+  end
+
   @doc """
   Starts a long-lived agent and returns its pid.
 
   The agent is started with the given initial task and can receive
-  further messages via `send/2` and `ask/2`.
+  further messages via `cast/2` and `call/2`.
 
   ## Parameters
     - agent_module: The agent module to start
@@ -73,10 +93,10 @@ defmodule Legion.Tools.AgentTool do
 
   ## Example
 
-      {:ok, pid} = Legion.Tools.AgentTool.start(MyApp.AssistantAgent, "Initialize")
+      {:ok, pid} = Legion.Tools.AgentTool.start_link(MyApp.AssistantAgent, "Initialize")
   """
-  @spec start(module(), String.t()) :: {:ok, pid()} | {:error, String.t()}
-  def start(agent_module, initial_task) do
+  @spec start_link(module(), String.t()) :: {:ok, pid()} | {:error, String.t()}
+  def start_link(agent_module, initial_task) do
     opts = Vault.get(__MODULE__, %{})
     allowed = Map.get(opts, :allowed_agents, :all)
 
@@ -102,36 +122,15 @@ defmodule Legion.Tools.AgentTool do
 
   ## Example
 
-      Legion.Tools.AgentTool.send(agent_pid, "Process the next batch")
+      Legion.Tools.AgentTool.cast(agent_pid, "Process the next batch")
   """
-  @spec send(pid(), String.t()) :: :ok
-  def send(pid, message) do
+  @spec cast(pid(), String.t()) :: :ok
+  def cast(pid, message) do
     Legion.cast(pid, message)
   end
 
-  @doc """
-  Sends a synchronous message to a long-lived agent and waits for response.
-
-  Blocks until the agent processes the message and returns a result.
-
-  ## Parameters
-    - pid: The agent process identifier
-    - message: The message to send
-
-  ## Returns
-    - `{:ok, result}` - Agent responded with result
-    - `{:cancel, reason}` - Agent was cancelled
-
-  ## Example
-
-      {:ok, response} = Legion.Tools.AgentTool.ask(agent_pid, "What is the status?")
-  """
-  @spec ask(pid(), String.t()) :: {:ok, any()} | {:cancel, atom()}
-  def ask(pid, message) do
-    Legion.send_sync(pid, message)
-  end
-
   @doc false
+  @impl true
   def dynamic_doc(opts) do
     case Map.get(opts, :allowed_agents) do
       nil ->
@@ -155,23 +154,27 @@ defmodule Legion.Tools.AgentTool do
   end
 
   @doc false
+  @impl true
   def get_aliases(opts) do
-    case Map.get(opts, :allowed_agents) do
-      nil ->
-        []
-
-      :all ->
-        []
-
-      agents when is_list(agents) ->
-        Enum.map(agents, fn agent ->
-          # Convert string back to atom if needed (stored as strings in Vault)
-          module = if is_binary(agent), do: String.to_existing_atom(agent), else: agent
-          short_name = get_short_name(module)
-          {short_name, module}
-        end)
-    end
+    opts
+    |> Map.get(:allowed_agents)
+    |> aliases_from_allowed()
   end
+
+  defp aliases_from_allowed(nil), do: []
+  defp aliases_from_allowed(:all), do: []
+
+  defp aliases_from_allowed(agents) when is_list(agents) do
+    Enum.map(agents, fn agent ->
+      module = normalize_agent(agent)
+      {get_short_name(module), module}
+    end)
+  end
+
+  defp aliases_from_allowed(_), do: []
+
+  defp normalize_agent(agent) when is_binary(agent), do: String.to_existing_atom(agent)
+  defp normalize_agent(agent) when is_atom(agent), do: agent
 
   defp get_short_name(module) when is_atom(module) do
     module |> Module.split() |> List.last() |> String.to_atom()
@@ -188,6 +191,7 @@ defmodule Legion.Tools.AgentTool do
   end
 
   @doc false
+  @impl true
   def tool_description do
     "Spawns and communicates with other Legion agents for task delegation."
   end

@@ -10,7 +10,7 @@ defmodule Legion.AgentServer do
 
       {:ok, pid} = Legion.start_link(MyAgent, "Initial task")
       Legion.cast(pid, "Follow-up message")
-      {:ok, response} = Legion.send_sync(pid, "Question")
+      {:ok, response} = Legion.call(pid, "Question")
 
   ## State
 
@@ -69,24 +69,23 @@ defmodule Legion.AgentServer do
   @doc """
   Sends a synchronous message to the agent and waits for result.
   """
-  @spec call(GenServer.server(), String.t(), timeout()) :: {:ok, any()} | {:cancel, atom()}
-  def call(agent, message, timeout \\ 30_000) do
-    GenServer.call(agent, {:message, message}, timeout)
+  @spec call(GenServer.server(), String.t() | {:respond, any()}, timeout()) ::
+          {:ok, any()} | {:cancel, atom()}
+  def call(agent, message, timeout \\ 30_000)
+
+  def call(agent, {:respond, _} = message, timeout) do
+    GenServer.call(agent, message, timeout)
   end
 
-  @doc """
-  Responds to a pending human input request.
-  """
-  @spec respond(GenServer.server(), any()) :: :ok | {:error, :no_pending_request}
-  def respond(agent, response) do
-    GenServer.call(agent, {:human_response, response})
+  def call(agent, message, timeout) do
+    GenServer.call(agent, {:message, message}, timeout)
   end
 
   @doc """
   Requests human input (called from within HumanTool).
 
   This is called from the tool execution context and blocks until
-  a response is received via respond/2.
+  a response is received via Legion.call/3 with {:respond, response}.
   """
   @spec request_human_input(GenServer.server(), String.t(), atom()) :: any()
   def request_human_input(agent, question, type) do
@@ -171,7 +170,7 @@ defmodule Legion.AgentServer do
   end
 
   @impl true
-  def handle_call({:human_response, response}, _from, state) do
+  def handle_call({:respond, response}, _from, state) do
     case state.human_input_waiter do
       nil ->
         {:reply, {:error, :no_pending_request}, state}
@@ -194,25 +193,22 @@ defmodule Legion.AgentServer do
   # Private functions
 
   defp setup_vault(agent_module, tools) do
-    tool_opts =
-      tools
-      |> Enum.map(fn tool_module ->
-        opts = agent_module.tool_options(tool_module)
-        # Convert allowed_agents atoms to strings for AgentTool
-        opts =
-          if Map.has_key?(opts, :allowed_agents) and is_list(opts.allowed_agents) do
-            Map.update!(opts, :allowed_agents, fn agents ->
-              Enum.map(agents, &to_string/1)
-            end)
-          else
-            opts
-          end
+    tools
+    |> Enum.map(&build_tool_entry(agent_module, &1))
+    |> Enum.into(%{})
+    |> Vault.unsafe_merge()
+  end
 
-        {tool_module, opts}
-      end)
-      |> Enum.into(%{})
+  defp build_tool_entry(agent_module, tool_module) do
+    opts = agent_module.tool_options(tool_module)
+    {tool_module, normalize_allowed_agents(opts)}
+  end
 
-    Vault.unsafe_merge(tool_opts)
+  defp normalize_allowed_agents(opts) do
+    case Map.get(opts, :allowed_agents) do
+      agents when is_list(agents) -> Map.put(opts, :allowed_agents, Enum.map(agents, &to_string/1))
+      _ -> opts
+    end
   end
 
   defp process_message(state, message) do

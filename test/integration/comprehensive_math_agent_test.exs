@@ -11,7 +11,7 @@ defmodule Legion.Integration.ComprehensiveMathAgentTest do
     with_api_key do
       # Test that the agent can use tools from different modules
       result =
-        Legion.call(
+        Legion.execute(
           ComprehensiveMathAgent,
           """
           Calculate the following step by step:

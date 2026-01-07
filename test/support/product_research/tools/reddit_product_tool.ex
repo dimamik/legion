@@ -20,13 +20,13 @@ defmodule Legion.Test.ProductResearch.Tools.RedditProductTool do
         |> Enum.take(limit)
         |> Enum.map(fn %{"data" => post} ->
           %{
-            title: post["title"] || "",
-            url: post["url"] || "",
-            score: post["score"] || 0,
-            selftext: post["selftext"] || "",
-            subreddit: post["subreddit"] || "",
-            num_comments: post["num_comments"] || 0,
-            permalink: post["permalink"] || "",
+            title: Map.get(post, "title", ""),
+            url: Map.get(post, "url", ""),
+            score: Map.get(post, "score", 0),
+            selftext: Map.get(post, "selftext", ""),
+            subreddit: Map.get(post, "subreddit", ""),
+            num_comments: Map.get(post, "num_comments", 0),
+            permalink: Map.get(post, "permalink", ""),
             source: "Reddit"
           }
         end)

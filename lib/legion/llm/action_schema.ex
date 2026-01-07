@@ -43,9 +43,8 @@ defmodule Legion.LLM.ActionSchema do
         code: %{
           type: "string",
           description: """
-          Elixir code to execute. Required when action is "eval_and_continue" or "eval_and_complete".
+          Elixir code to execute. Must be provided when action is "eval_and_continue" or "eval_and_complete". Otherwise - return an empty string.
           This code will be evaluated in a sandboxed environment with access to the allowed tools.
-          Provide an empty string "" when action is "return" or "done".
           """
         },
         result: result_schema
@@ -74,7 +73,8 @@ defmodule Legion.LLM.ActionSchema do
       properties: properties,
       required: required_fields,
       additionalProperties: false,
-      description: "Structured result conforming to the agent's output_schema"
+      description:
+        "Structured result conforming to the agent's output_schema. Should only be provided when action is 'return'. Otherwise - return an empty object."
     }
   end
 

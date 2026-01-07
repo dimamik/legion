@@ -74,7 +74,7 @@ defmodule Legion.Test.ProductResearch.Tools.WebScraperTool do
     |> String.replace(~r/\s+/, " ")
     |> String.trim()
     # Limit length to avoid overwhelming the agent
-    |> String.slice(0, 10000)
+    |> String.slice(0, 10_000)
   end
 
   defp parse_duckduckgo_results(html, limit) do

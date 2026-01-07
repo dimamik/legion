@@ -58,7 +58,7 @@ defmodule Legion.Integration.Scrapers.WebScraperTest do
 
       IO.puts("[2/2] Coordinator is calling sub-agents and coordinating work...\n")
 
-      coordinator_result = Legion.call(CoordinatorAgent, coordinator_task, timeout: 300_000)
+      coordinator_result = Legion.execute(CoordinatorAgent, coordinator_task, timeout: 300_000)
 
       # Verify coordinator completed
       assert match?({:ok, _}, coordinator_result) or match?({:cancel, _}, coordinator_result)

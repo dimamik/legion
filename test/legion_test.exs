@@ -63,10 +63,7 @@ defmodule LegionTest do
       assert prompt =~ "power"
       assert prompt =~ "factorial"
 
-      # Should include response format
-      assert prompt =~ "action"
-      assert prompt =~ "eval_and_continue"
-      assert prompt =~ "eval_and_complete"
+      assert prompt =~ "You are an AI agent that accomplishes tasks by writing Elixir code"
     end
   end
 
