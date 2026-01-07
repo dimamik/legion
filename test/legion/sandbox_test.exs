@@ -145,6 +145,39 @@ defmodule Legion.SandboxTest do
       assert {:error, %{type: :restricted}} =
                Sandbox.eval("&File.read/1", Legion.Sandbox.DefaultAllowlist)
     end
+
+    test "restricts local captures of apply" do
+      # Local capture &apply/2 should be blocked
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval("&apply/2", Legion.Sandbox.DefaultAllowlist)
+
+      # Local capture &apply/3 should be blocked
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval("&apply/3", Legion.Sandbox.DefaultAllowlist)
+    end
+
+    test "restricts local captures followed by invocation" do
+      # This is the attack pattern mentioned in the review
+      code = """
+      f = &apply/3
+      f.(File, :read!, ["/etc/passwd"])
+      """
+
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval(code, Legion.Sandbox.DefaultAllowlist)
+    end
+
+    test "restricts local captures of other dangerous functions" do
+      # Test other dangerous local captures
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval("&spawn/1", Legion.Sandbox.DefaultAllowlist)
+
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval("&send/2", Legion.Sandbox.DefaultAllowlist)
+
+      assert {:error, %{type: :restricted}} =
+               Sandbox.eval("&exit/1", Legion.Sandbox.DefaultAllowlist)
+    end
   end
 
   describe "security restrictions" do
