@@ -81,7 +81,18 @@ defmodule Legion.Tool do
   """
   @callback get_aliases(opts :: map()) :: [{atom(), module()}]
 
-  @optional_callbacks dynamic_doc: 1, get_aliases: 1
+  @doc """
+  Optional callback that overrides the tool description in prompts.
+
+  By default, the tool's `@moduledoc` is used as its description.
+  Implement this callback to provide a custom description instead.
+
+  ## Returns
+    A string description for the tool
+  """
+  @callback tool_description() :: String.t()
+
+  @optional_callbacks dynamic_doc: 1, get_aliases: 1, tool_description: 0
 
   defmacro __using__(_opts) do
     quote do
@@ -126,7 +137,7 @@ defmodule Legion.Tool do
   end
 
   # Internal callbacks that should not appear in tool documentation
-  @internal_callbacks [:dynamic_doc, :get_aliases, :__tool_info__]
+  @internal_callbacks [:dynamic_doc, :get_aliases, :tool_description, :__tool_info__]
 
   defp extract_functions_at_compile_time(env) do
     module = env.module

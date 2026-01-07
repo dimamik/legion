@@ -1,17 +1,15 @@
 defmodule Legion.Test.ProductResearch.Agents.HackerNewsProductAgent do
   @moduledoc """
-  Researches products on HackerNews.
+  Researches products on HackerNews by searching posts and reading comments.
 
-  Tools:
-  - `HackerNewsProductTool.search_product(product_name)` - searches HN posts
-  - `HackerNewsProductTool.fetch_comments(object_id)` - gets comments
-
-  Example:
+  Example workflow:
   ```
   posts = Legion.Test.ProductResearch.Tools.HackerNewsProductTool.search_product("Sony WH-1000XM5")
+  # Then fetch comments from interesting posts
+  comments = Legion.Test.ProductResearch.Tools.HackerNewsProductTool.fetch_comments(object_id)
   ```
 
-  Return a summary string with findings.
+  IMPORTANT: Your final response must contain the ACTUAL findings from HackerNews - real opinions, technical insights, pros/cons mentioned by users. Do NOT return generic messages like "Summary generated" - return the actual summarized content with specific details from the posts and comments you found.
   """
   use Legion.AIAgent, tools: [Legion.Test.ProductResearch.Tools.HackerNewsProductTool]
 

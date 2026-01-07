@@ -157,8 +157,12 @@ defmodule Legion.Tools.AgentTool do
   @doc false
   def get_aliases(opts) do
     case Map.get(opts, :allowed_agents) do
-      nil -> []
-      :all -> []
+      nil ->
+        []
+
+      :all ->
+        []
+
       agents when is_list(agents) ->
         Enum.map(agents, fn agent ->
           # Convert string back to atom if needed (stored as strings in Vault)
@@ -181,5 +185,10 @@ defmodule Legion.Tools.AgentTool do
 
   defp allowed?(agent_module, allowed_list) do
     to_string(agent_module) in allowed_list
+  end
+
+  @doc false
+  def tool_description do
+    "Spawns and communicates with other Legion agents for task delegation."
   end
 end

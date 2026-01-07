@@ -1,17 +1,15 @@
 defmodule Legion.Test.ProductResearch.Agents.RedditProductAgent do
   @moduledoc """
-  Researches products on Reddit.
+  Researches products on Reddit by searching posts and reading comments.
 
-  Tools:
-  - `RedditProductTool.search_product(product_name, subreddits)` - searches Reddit
-  - `RedditProductTool.fetch_comments(permalink)` - gets comments
-
-  Example:
+  Example workflow:
   ```
   posts = Legion.Test.ProductResearch.Tools.RedditProductTool.search_product("Sony WH-1000XM5", ["headphones"])
+  # Then fetch comments from interesting posts
+  comments = Legion.Test.ProductResearch.Tools.RedditProductTool.fetch_comments(post_permalink)
   ```
 
-  Return a summary string with findings.
+  IMPORTANT: Your final response must contain the ACTUAL findings from Reddit - real opinions, pros/cons, and issues mentioned by users. Do NOT return generic messages like "Summary generated" - return the actual summarized content with specific details from the posts and comments you found.
   """
   use Legion.AIAgent, tools: [Legion.Test.ProductResearch.Tools.RedditProductTool]
 

@@ -1,25 +1,18 @@
 defmodule Legion.Test.ProductResearch.Agents.ProductCoordinatorAgent do
   @moduledoc """
-  Coordinates and summarizes product research by delegating to specialized sub-agents. Always calls Legion tools to gather information instead of relying on internal knowledge. Try to execute tool calls via code as much as possible.
+  Coordinates product research by delegating to specialized sub-agents, then synthesizes their findings into a comprehensive summary.
 
-  Example:
+  Example workflow:
   ```
-  hn = Legion.Tools.AgentTool.call(
-    Legion.Test.ProductResearch.Agents.HackerNewsProductAgent,
-    "<thing> pros, cons, and alternatives"
-  )
-  reddit = Legion.Tools.AgentTool.call(
-    Legion.Test.ProductResearch.Agents.RedditProductAgent,
-    "<thing> pros, cons, and alternatives"
-  )
-  web = Legion.Tools.AgentTool.call(
-    Legion.Test.ProductResearch.Agents.WebResearchAgent,
-    "<thing> pros, cons, and alternatives"
-  )
-  [hn, reddit, web]
+  {:ok, hn_result} = Legion.Tools.AgentTool.call(HackerNewsProductAgent, "<product> reviews")
+  {:ok, reddit_result} = Legion.Tools.AgentTool.call(RedditProductAgent, "<product> opinions")
+  {:ok, web_result} = Legion.Tools.AgentTool.call(WebResearchAgent, "<product> specs and reviews")
+  # Now you have the actual findings from each source to synthesize
   ```
 
-  Return a summary string with PROS, CONS, and ALTERNATIVES sections. You can call multiple agents at once. Use `WebResearchAgent` for general web research to dig deeper into things that concern you.
+  After gathering results from sub-agents, synthesize their findings into a final summary with PROS, CONS, and ALTERNATIVES sections. The sub-agents return actual content - extract and combine the key insights from each source into your response.
+
+  IMPORTANT: Your final response must be a comprehensive summary that combines the actual findings from all sub-agents. Do NOT return the raw agent results or generic messages - synthesize the content into a coherent summary.
   """
   use Legion.AIAgent, tools: [Legion.Tools.AgentTool]
 

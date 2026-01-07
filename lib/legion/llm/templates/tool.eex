@@ -1,0 +1,11 @@
+## <%= @module_name %>
+<%= if @moduledoc do %>
+<%= @moduledoc %>
+<% end %>
+<%= if @dynamic_doc do %>
+<%= @dynamic_doc %>
+<% end %>
+### Functions
+<%= for func <- @functions do %>
+<%= func %>
+<% end %>

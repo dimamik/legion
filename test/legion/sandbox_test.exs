@@ -77,7 +77,9 @@ defmodule Legion.SandboxTest do
       assert {:error, %{type: :timeout}} =
                Sandbox.eval(
                  "loop = fn f -> f.(f) end; loop.(loop)",
-                 Legion.Sandbox.DefaultAllowlist, timeout: 100)
+                 Legion.Sandbox.DefaultAllowlist,
+                 timeout: 100
+               )
     end
 
     test "returns parsing errors" do
