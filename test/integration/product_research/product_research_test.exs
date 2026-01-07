@@ -25,11 +25,8 @@ defmodule Legion.Integration.ProductResearch.ProductResearchTest do
 
       # Check for structure indicating actual research was done
       # Should have either pros/cons sections, model names, or source links
-      has_structure =
-        response_lower =~ "pros" or
-          response_lower =~ "cons" or
-          response_lower =~ "model" or
-          response_lower =~ "http"
+      structure_indicators = ["pros", "cons", "model", "http"]
+      has_structure = Enum.any?(structure_indicators, &(response_lower =~ &1))
 
       assert has_structure,
              "Response should contain meaningful product research with pros/cons, models, or source links"

@@ -191,7 +191,7 @@ defmodule Legion.Sandbox.ASTAnalyzer do
   # Check local function captures: &function/arity (implicitly Kernel)
   # These captures can bypass the sandbox if they refer to dangerous Kernel functions
   defp check_node(
-         {:&, _meta, [{:/, _, [{function, _, _context}, arity]}]},
+         {:&, _meta, [{:/, _, [{function, _, _local_context}, arity]}]},
          allowlist_module,
          _aliases
        )
