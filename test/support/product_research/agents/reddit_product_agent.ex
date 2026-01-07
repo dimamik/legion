@@ -22,11 +22,6 @@ defmodule Legion.Test.ProductResearch.Agents.RedditProductAgent do
 
   @impl true
   def sandbox_options do
-    [
-      timeout: 300_000,
-      max_reductions: 100_000_000,
-      stdio: :stdout,
-      max_heap_size: 10_000_000
-    ]
+    [timeout: 300_000]
   end
 end

@@ -93,10 +93,11 @@ defmodule Legion.Executor do
   end
 
   defp setup_vault(agent_module, tools) do
-    tool_opts =
-      tools
-      |> Enum.map(fn tool_module ->
+    # Gather tool options and aliases
+    {tool_opts, all_aliases} =
+      Enum.reduce(tools, {%{}, []}, fn tool_module, {opts_acc, aliases_acc} ->
         opts = agent_module.tool_options(tool_module)
+
         # Convert allowed_agents atoms to strings for AgentTool
         opts =
           if Map.has_key?(opts, :allowed_agents) and is_list(opts.allowed_agents) do
@@ -107,11 +108,20 @@ defmodule Legion.Executor do
             opts
           end
 
-        {tool_module, opts}
-      end)
-      |> Enum.into(%{})
+        # Gather aliases if tool implements get_aliases/1
+        tool_aliases =
+          if function_exported?(tool_module, :get_aliases, 1) do
+            tool_module.get_aliases(opts)
+          else
+            []
+          end
 
+        {Map.put(opts_acc, tool_module, opts), aliases_acc ++ tool_aliases}
+      end)
+
+    # Store tool opts and aliases in Vault
     Vault.unsafe_merge(tool_opts)
+    Vault.unsafe_merge(%{__legion_aliases__: all_aliases})
   end
 
   defp execution_loop(agent_module, context, config) do
@@ -236,9 +246,12 @@ defmodule Legion.Executor do
       [:legion, :sandbox, :eval],
       %{agent: agent_module, code: code},
       fn ->
+        # Get aliases from Vault
+        aliases = Vault.get(:__legion_aliases__, [])
+
         # Merge base config with agent's custom sandbox options
         sandbox_opts =
-          [timeout: config.sandbox.timeout]
+          [timeout: config.sandbox.timeout, aliases: aliases]
           |> Keyword.merge(agent_module.sandbox_options())
 
         # Agent module itself implements Legion.Sandbox.Allowlist

@@ -58,7 +58,6 @@ defmodule Legion.ConfigTest do
       assert defaults.max_retries == 3
       assert defaults.timeout == 30_000
       assert defaults.sandbox.timeout == 5_000
-      assert defaults.sandbox.max_heap_size == 50_000
     end
   end
 end

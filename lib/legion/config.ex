@@ -15,8 +15,7 @@ defmodule Legion.Config do
     max_iterations: 10,
     max_retries: 3,
     sandbox: %{
-      timeout: 5_000,
-      max_heap_size: 50_000
+      timeout: 5_000
     }
   }
 

@@ -95,18 +95,13 @@ defmodule Legion.AIAgent do
 
   These options control resource limits for sandboxed code evaluation.
   Common options include:
-  - `:timeout` - Max execution time in ms (default: 50)
-  - `:max_heap_size` - Memory limit (default: 50_000)
-  - `:max_reductions` - CPU cycles limit (default: 30_000)
+  - `:timeout` - Max execution time in ms (default: 5000)
 
   ## Example
 
       @impl Legion.AIAgent
       def sandbox_options do
-        [
-          timeout: 5000,
-          max_heap_size: 100_000
-        ]
+        [timeout: 5000]
       end
   """
   @callback sandbox_options() :: keyword()

@@ -34,11 +34,6 @@ defmodule Legion.Test.Scrapers.Agents.RedditAgent do
 
   @impl true
   def sandbox_options do
-    [
-      timeout: 100_000,
-      max_reductions: 1_000_000,
-      stdio: :stdout,
-      max_heap_size: 200_000
-    ]
+    [timeout: 100_000]
   end
 end

@@ -39,11 +39,38 @@ defmodule Legion.Sandbox do
   @spec eval(String.t(), module(), keyword()) :: {:ok, any()} | {:error, map()}
   def eval(code, allowlist, opts \\ []) do
     timeout = Keyword.get(opts, :timeout, @default_timeout)
+    aliases = Keyword.get(opts, :aliases, [])
 
     with {:ok, ast} <- parse_code(code),
          :ok <- ASTAnalyzer.analyze(ast, allowlist) do
-      execute_with_timeout(ast, timeout)
+      ast_with_aliases = inject_aliases(ast, aliases)
+      execute_with_timeout(ast_with_aliases, timeout)
     end
+  end
+
+  # Injects alias statements at the beginning of the code block
+  # aliases is a list of {ShortName, FullModule} tuples
+  defp inject_aliases(ast, []), do: ast
+
+  defp inject_aliases(ast, aliases) do
+    alias_statements =
+      Enum.map(aliases, fn {short_name, full_module} ->
+        {:alias, [context: Elixir],
+         [
+           {:__aliases__, [alias: false], module_parts(full_module)},
+           [as: {:__aliases__, [alias: false], [short_name]}]
+         ]}
+      end)
+
+    {:__block__, [], alias_statements ++ [ast]}
+  end
+
+  defp module_parts(module) when is_atom(module) do
+    module
+    |> Atom.to_string()
+    |> String.replace_leading("Elixir.", "")
+    |> String.split(".")
+    |> Enum.map(&String.to_atom/1)
   end
 
   defp parse_code(code) do

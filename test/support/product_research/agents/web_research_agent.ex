@@ -1,17 +1,13 @@
 defmodule Legion.Test.ProductResearch.Agents.WebResearchAgent do
   @moduledoc """
-  General web research on products.
-
-  Tools:
-  - `WebScraperTool.search_web(query)` - searches with DuckDuckGo
-  - `WebScraperTool.fetch_page(url)` - fetches page content
+  General web research. Navigate to relevant web pages and extract key information to answer the user's query.
 
   Example:
   ```
-  results = Legion.Test.ProductResearch.Tools.WebScraperTool.search_web("Sony WH-1000XM5 review")
+  results = Legion.Test.ProductResearch.Tools.WebScraperTool.search_web("Sony WH-1000XM5 pros and cons")
   ```
 
-  Return a summary string with key findings.
+  Returns the answer to the user's query based on web research. Includes source links to back up findings. If uncertain - query more sources.
   """
   use Legion.AIAgent, tools: [Legion.Test.ProductResearch.Tools.WebScraperTool]
 
@@ -22,11 +18,6 @@ defmodule Legion.Test.ProductResearch.Agents.WebResearchAgent do
 
   @impl true
   def sandbox_options do
-    [
-      timeout: 300_000,
-      max_reductions: 100_000_000,
-      stdio: :stdout,
-      max_heap_size: 10_000_000
-    ]
+    [timeout: 300_000]
   end
 end

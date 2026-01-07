@@ -131,6 +131,52 @@ defmodule Legion.Tools.AgentTool do
     Legion.send_sync(pid, message)
   end
 
+  @doc false
+  def dynamic_doc(opts) do
+    case Map.get(opts, :allowed_agents) do
+      nil ->
+        nil
+
+      :all ->
+        "**Allowed Agents:** All agents are allowed."
+
+      agents when is_list(agents) ->
+        agent_list =
+          Enum.map_join(agents, "\n", fn agent ->
+            short_name = get_short_name(agent)
+            "- `#{short_name}`"
+          end)
+
+        """
+        **Allowed Agents:**
+        #{agent_list}
+        """
+    end
+  end
+
+  @doc false
+  def get_aliases(opts) do
+    case Map.get(opts, :allowed_agents) do
+      nil -> []
+      :all -> []
+      agents when is_list(agents) ->
+        Enum.map(agents, fn agent ->
+          # Convert string back to atom if needed (stored as strings in Vault)
+          module = if is_binary(agent), do: String.to_existing_atom(agent), else: agent
+          short_name = get_short_name(module)
+          {short_name, module}
+        end)
+    end
+  end
+
+  defp get_short_name(module) when is_atom(module) do
+    module |> Module.split() |> List.last() |> String.to_atom()
+  end
+
+  defp get_short_name(module_string) when is_binary(module_string) do
+    module_string |> Module.split() |> List.last() |> String.to_atom()
+  end
+
   defp allowed?(_agent_module, :all), do: true
 
   defp allowed?(agent_module, allowed_list) do

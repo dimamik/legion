@@ -5,11 +5,12 @@ defmodule Legion.LLM.PromptBuilder do
   Builds system prompts for Legion AI agents.
 
   The system prompt is constructed in the following order:
-  1. Agent description (from agent's @moduledoc)
-  2. Tool documentation (formatted from each tool's @moduledoc + @doc)
-  3. Response format instructions (action types + output schema)
-  4. Rules about code execution
-  5. Custom instructions from agent's system_prompt/0 callback (appended last)
+  1. Introduction (explains what a Legion agent is)
+  2. Agent description (from agent's @moduledoc)
+  3. Tool documentation (formatted from each tool's @moduledoc + @doc)
+  4. Response format instructions (action types + output schema)
+  5. Rules about code execution
+  6. Custom instructions from agent's system_prompt/0 callback (appended last)
   """
 
   @doc """
@@ -28,8 +29,9 @@ defmodule Legion.LLM.PromptBuilder do
     custom_prompt = agent_module.system_prompt()
 
     [
+      build_introduction(),
       build_agent_description(agent_info),
-      build_tools_documentation(agent_info.tools),
+      build_tools_documentation(agent_info.tools, agent_module),
       build_response_format(output_schema),
       build_execution_rules(),
       build_custom_instructions(custom_prompt)
@@ -38,10 +40,18 @@ defmodule Legion.LLM.PromptBuilder do
     |> Enum.join("\n\n")
   end
 
+  defp build_introduction do
+    """
+    You are an AI agent that accomplishes tasks by writing Elixir code. Your code runs in a sandbox and you receive execution results to iterate until the task is complete.
+    Before returning a final answer, ensure that all aspects of the user's request have been addressed.
+    """
+    |> String.trim()
+  end
+
   defp build_agent_description(agent_info) do
     case agent_info.moduledoc do
       nil ->
-        "You are an AI agent that executes tasks by generating Elixir code."
+        nil
 
       doc ->
         """
@@ -52,10 +62,10 @@ defmodule Legion.LLM.PromptBuilder do
     end
   end
 
-  defp build_tools_documentation([]), do: nil
+  defp build_tools_documentation([], _agent_module), do: nil
 
-  defp build_tools_documentation(tools) do
-    tools_docs = Enum.map_join(tools, "\n\n", &format_tool_doc/1)
+  defp build_tools_documentation(tools, agent_module) do
+    tools_docs = Enum.map_join(tools, "\n\n", &format_tool_doc(&1, agent_module))
 
     """
     # Available Tools
@@ -66,14 +76,20 @@ defmodule Legion.LLM.PromptBuilder do
     """
   end
 
-  defp format_tool_doc(tool_module) do
+  defp format_tool_doc(tool_module, agent_module) do
     tool_info = tool_module.__tool_info__()
+    tool_opts = agent_module.tool_options(tool_module)
     module_name = inspect(tool_module)
 
+    # Get dynamic documentation if the tool implements it
+    dynamic_doc = get_dynamic_doc(tool_module, tool_opts)
+
     header =
-      case tool_info.moduledoc do
-        nil -> "## #{module_name}"
-        doc -> "## #{module_name}\n\n#{doc}"
+      case {tool_info.moduledoc, dynamic_doc} do
+        {nil, nil} -> "## #{module_name}"
+        {nil, dyn} -> "## #{module_name}\n\n#{dyn}"
+        {doc, nil} -> "## #{module_name}\n\n#{doc}"
+        {doc, dyn} -> "## #{module_name}\n\n#{doc}\n\n#{dyn}"
       end
 
     functions_doc =
@@ -86,6 +102,14 @@ defmodule Legion.LLM.PromptBuilder do
 
     #{functions_doc}
     """
+  end
+
+  defp get_dynamic_doc(tool_module, opts) do
+    if function_exported?(tool_module, :dynamic_doc, 1) do
+      tool_module.dynamic_doc(opts)
+    else
+      nil
+    end
   end
 
   defp format_function_doc(module_name, %{name: name, params: params, doc: doc}) do
