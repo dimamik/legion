@@ -74,7 +74,7 @@ defmodule Legion.LLM.ActionSchema do
       required: required_fields,
       additionalProperties: false,
       description:
-        "Structured result conforming to the agent's output_schema. This field MUST only contain data when action is 'return'. For all other actions, this field MUST be present but set to an empty JSON object (`{}`)."
+        "Structured result conforming to the agent's output_schema. Should only be provided when action is 'return'. Otherwise - return an empty object."
     }
   end
 
