@@ -43,7 +43,7 @@ defmodule Legion.LLM.ActionSchema do
         code: %{
           type: "string",
           description: """
-          Elixir code to execute. Must be provided when action is "eval_and_continue" or "eval_and_complete". Otherwise - return an empty string.
+          Elixir code to execute. Must be provided when action is "eval_and_continue" or "eval_and_complete". When action is "return" or "done", provide an empty string.
           This code will be evaluated in a sandboxed environment with access to the allowed tools.
           """
         },

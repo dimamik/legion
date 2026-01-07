@@ -19,7 +19,17 @@ defmodule Legion.Integration.ProductResearch.ProductResearchTest do
 
       assert {:ok, %{"response" => response}} = result
 
-      assert "tongs" in String.downcase(response)
+      # Verify the response contains product research results
+      response_lower = String.downcase(response)
+      assert response_lower =~ "tongs", "Response should mention tongs"
+
+      # Check for structure indicating actual research was done
+      # Should have either pros/cons sections, model names, or source links
+      structure_indicators = ["pros", "cons", "model", "http"]
+      has_structure = Enum.any?(structure_indicators, &(response_lower =~ &1))
+
+      assert has_structure,
+             "Response should contain meaningful product research with pros/cons, models, or source links"
     end
   end
 end

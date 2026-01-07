@@ -176,12 +176,8 @@ defmodule Legion.Tools.AgentTool do
   defp normalize_agent(agent) when is_binary(agent), do: String.to_existing_atom(agent)
   defp normalize_agent(agent) when is_atom(agent), do: agent
 
-  defp get_short_name(module) when is_atom(module) do
+  defp get_short_name(module) when is_atom(module) or is_binary(module) do
     module |> Module.split() |> List.last() |> String.to_atom()
-  end
-
-  defp get_short_name(module_string) when is_binary(module_string) do
-    module_string |> Module.split() |> List.last() |> String.to_atom()
   end
 
   defp allowed?(_agent_module, :all), do: true

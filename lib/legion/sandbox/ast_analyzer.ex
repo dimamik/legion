@@ -188,6 +188,18 @@ defmodule Legion.Sandbox.ASTAnalyzer do
     check_mfa(module, function, arity, allowlist_module)
   end
 
+  # Check local function captures: &function/arity (implicitly Kernel)
+  # These captures can bypass the sandbox if they refer to dangerous Kernel functions
+  defp check_node(
+         {:&, _meta, [{:/, _, [{function, _, _local_context}, arity]}]},
+         allowlist_module,
+         _aliases
+       )
+       when is_atom(function) and is_integer(arity) do
+    # Local captures implicitly refer to Kernel module
+    check_mfa(Kernel, function, arity, allowlist_module)
+  end
+
   # Block receive special form
   defp check_node({:receive, _meta, _args}, _allowlist_module, _aliases) do
     {:error, %{type: :restricted, message: "receive blocks are not allowed in sandbox"}}
