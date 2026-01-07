@@ -206,8 +206,11 @@ defmodule Legion.AgentServer do
 
   defp normalize_allowed_agents(opts) do
     case Map.get(opts, :allowed_agents) do
-      agents when is_list(agents) -> Map.put(opts, :allowed_agents, Enum.map(agents, &to_string/1))
-      _ -> opts
+      agents when is_list(agents) ->
+        Map.put(opts, :allowed_agents, Enum.map(agents, &to_string/1))
+
+      _ ->
+        opts
     end
   end
 

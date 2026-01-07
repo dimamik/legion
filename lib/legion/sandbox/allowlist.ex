@@ -71,53 +71,60 @@ defmodule Legion.Sandbox.Allowlist do
   end
 
   @fun_status_quote_ast (quote do
-    @impl Legion.Sandbox.Allowlist
-    def fun_status(module, function, _arity)
-        when is_atom(module) and is_atom(function) do
-      spec()
-      |> Map.get(module)
-      |> evaluate_permission(module, function)
-    end
+                           @impl Legion.Sandbox.Allowlist
+                           def fun_status(module, function, _arity)
+                               when is_atom(module) and is_atom(function) do
+                             spec()
+                             |> Map.get(module)
+                             |> evaluate_permission(module, function)
+                           end
 
-    defp evaluate_permission(nil, _module, _function), do: :restricted
-    defp evaluate_permission(:all, module, function), do: allow_if_exported(module, function)
+                           defp evaluate_permission(nil, _module, _function), do: :restricted
 
-    defp evaluate_permission([only: functions], module, function) do
-      allow_if(Enum.member?(functions, function), module, function)
-    end
+                           defp evaluate_permission(:all, module, function),
+                             do: allow_if_exported(module, function)
 
-    defp evaluate_permission([except: functions], module, function) do
-      reject_if(Enum.member?(functions, function), module, function)
-    end
+                           defp evaluate_permission([only: functions], module, function) do
+                             allow_if(Enum.member?(functions, function), module, function)
+                           end
 
-    defp evaluate_permission(_unsupported, _module, _function), do: :restricted
+                           defp evaluate_permission([except: functions], module, function) do
+                             reject_if(Enum.member?(functions, function), module, function)
+                           end
 
-    defp allow_if(true, module, function), do: allow_if_exported(module, function)
-    defp allow_if(false, _module, _function), do: :restricted
+                           defp evaluate_permission(_unsupported, _module, _function),
+                             do: :restricted
 
-    defp reject_if(true, _module, _function), do: :restricted
-    defp reject_if(false, module, function), do: allow_if_exported(module, function)
+                           defp allow_if(true, module, function),
+                             do: allow_if_exported(module, function)
 
-    defp allow_if_exported(module, function) do
-      case function_exists?(module, function) do
-        true -> :allowed
-        false -> :restricted
-      end
-    end
+                           defp allow_if(false, _module, _function), do: :restricted
 
-    # Check if function exists with any arity
-    defp function_exists?(module, function) do
-      case Code.ensure_loaded(module) do
-        {:module, _} ->
-          module.__info__(:functions)
-          |> Keyword.keys()
-          |> Enum.member?(function)
+                           defp reject_if(true, _module, _function), do: :restricted
 
-        _ ->
-          false
-      end
-    end
-  end)
+                           defp reject_if(false, module, function),
+                             do: allow_if_exported(module, function)
+
+                           defp allow_if_exported(module, function) do
+                             case function_exists?(module, function) do
+                               true -> :allowed
+                               false -> :restricted
+                             end
+                           end
+
+                           # Check if function exists with any arity
+                           defp function_exists?(module, function) do
+                             case Code.ensure_loaded(module) do
+                               {:module, _} ->
+                                 module.__info__(:functions)
+                                 |> Keyword.keys()
+                                 |> Enum.member?(function)
+
+                               _ ->
+                                 false
+                             end
+                           end
+                         end)
 
   defmacro __before_compile__(env) do
     entries = Module.get_attribute(env.module, :allowlist_entries) || []
@@ -150,5 +157,4 @@ defmodule Legion.Sandbox.Allowlist do
 
   defp base_spec_quote(nil), do: quote(do: %{})
   defp base_spec_quote(module), do: quote(do: unquote(module).spec())
-
 end

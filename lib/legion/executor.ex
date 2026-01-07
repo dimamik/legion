@@ -93,7 +93,8 @@ defmodule Legion.Executor do
   end
 
   defp setup_vault(agent_module, tools) do
-    {tool_opts, aliases} = Enum.reduce(tools, {%{}, []}, &accumulate_tool_data(agent_module, &1, &2))
+    {tool_opts, aliases} =
+      Enum.reduce(tools, {%{}, []}, &accumulate_tool_data(agent_module, &1, &2))
 
     Vault.unsafe_merge(tool_opts)
     Vault.unsafe_merge(%{__legion_aliases__: aliases})
@@ -116,8 +117,11 @@ defmodule Legion.Executor do
 
   defp normalize_allowed_agents(opts) do
     case Map.get(opts, :allowed_agents) do
-      agents when is_list(agents) -> Map.put(opts, :allowed_agents, Enum.map(agents, &to_string/1))
-      _ -> opts
+      agents when is_list(agents) ->
+        Map.put(opts, :allowed_agents, Enum.map(agents, &to_string/1))
+
+      _ ->
+        opts
     end
   end
 
