@@ -65,6 +65,7 @@ defmodule Legion.Sandbox do
     {:__block__, [], alias_statements ++ [ast]}
   end
 
+  # TODO: Come back to this and fix atom conversion
   defp module_parts(module) when is_atom(module) do
     module
     |> Atom.to_string()
