@@ -1,5 +1,2 @@
-# Attach telemetry logger for integration tests
-Legion.Test.TelemetryLogger.attach()
-
-ExUnit.configure(exclude: [:integration])
-ExUnit.start()
+Legion.Telemetry.attach_default_logger()
+ExUnit.start(exclude: [:integration])
