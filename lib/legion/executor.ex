@@ -96,40 +96,44 @@ defmodule Legion.Executor do
     )
   end
 
-  defp handle_action(agent_module, messages, config, action, iteration, retries) do
-    case action do
-      %{"action" => eval, "code" => code}
-      when eval in ["eval_and_continue", "eval_and_complete"] and is_binary(code) and
-             code != "" ->
-        case eval_in_span(agent_module, code, config) do
-          {:ok, result} ->
-            messages = messages ++ [%{role: "user", content: format_result(result)}]
+  defp handle_action(
+         _agent,
+         messages,
+         _config,
+         %{"action" => "return", "result" => result},
+         _i,
+         _r
+       ),
+       do: {:ok, result, messages}
 
-            if eval == "eval_and_continue",
-              do: loop(agent_module, messages, config, iteration + 1, 0),
-              else: {:ok, result, messages}
+  defp handle_action(_agent, messages, _config, %{"action" => "done"}, _i, _r),
+    do: {:ok, nil, messages}
 
-          {:error, error} ->
-            handle_execution_error(agent_module, messages, config, error, iteration, retries)
-        end
+  defp handle_action(agent, messages, config, %{"action" => eval, "code" => code}, i, retries)
+       when eval in ["eval_and_continue", "eval_and_complete"] and code != "" do
+    case eval_in_span(agent, code, config) do
+      {:ok, result} ->
+        messages = messages ++ [%{role: "user", content: format_result(result)}]
 
-      %{"action" => "return", "result" => result} ->
-        {:ok, result, messages}
+        if eval == "eval_and_continue",
+          do: loop(agent, messages, config, i + 1, 0),
+          else: {:ok, result, messages}
 
-      %{"action" => "done"} ->
-        {:ok, nil, messages}
-
-      _ ->
-        handle_execution_error(
-          agent_module,
-          messages,
-          config,
-          "Unexpected action: #{inspect(action)}",
-          iteration,
-          retries
-        )
+      {:error, error} ->
+        handle_execution_error(agent, messages, config, error, i, retries)
     end
   end
+
+  defp handle_action(agent, messages, config, action, i, retries),
+    do:
+      handle_execution_error(
+        agent,
+        messages,
+        config,
+        "Unexpected action: #{inspect(action)}",
+        i,
+        retries
+      )
 
   defp eval_in_span(agent_module, code, config) do
     Telemetry.span([:legion, :sandbox, :eval], %{agent: agent_module, code: code}, fn ->

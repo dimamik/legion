@@ -59,6 +59,7 @@ defmodule Legion.Sandbox do
     aliases <> code_string
   end
 
+  # sobelow_skip ["RCE.CodeModule"]
   defp eval(code_string, timeout_ms) do
     parent = self()
 
