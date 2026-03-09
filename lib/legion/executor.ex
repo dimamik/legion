@@ -54,10 +54,10 @@ defmodule Legion.Executor do
   """
   def run(agent_module, messages, config) do
     config = Map.merge(@default_config, config)
-    loop(agent_module, messages, config, 0, 0)
+    loop(agent_module, messages, config, 0, 0, _bindings = [])
   end
 
-  defp loop(agent_module, messages, config, iteration, retries) do
+  defp loop(agent_module, messages, config, iteration, retries, bindings) do
     if iteration >= config.max_iterations do
       {:cancel, :reached_max_iterations, messages}
     else
@@ -66,7 +66,7 @@ defmodule Legion.Executor do
         %{agent: agent_module, iteration: iteration},
         fn ->
           {action, messages} = call_llm(agent_module, messages, config, iteration)
-          result = handle_action(agent_module, messages, config, action, iteration, retries)
+          result = handle_action(agent_module, messages, config, action, iteration, retries, bindings)
           {result, %{action: action["action"]}}
         end
       )
@@ -102,29 +102,30 @@ defmodule Legion.Executor do
          _config,
          %{"action" => "return", "result" => result},
          _i,
-         _r
+         _r,
+         _bindings
        ),
        do: {:ok, result, messages}
 
-  defp handle_action(_agent, messages, _config, %{"action" => "done"}, _i, _r),
+  defp handle_action(_agent, messages, _config, %{"action" => "done"}, _i, _r, _bindings),
     do: {:ok, nil, messages}
 
-  defp handle_action(agent, messages, config, %{"action" => eval, "code" => code}, i, retries)
+  defp handle_action(agent, messages, config, %{"action" => eval, "code" => code}, i, retries, bindings)
        when eval in ["eval_and_continue", "eval_and_complete"] and code != "" do
-    case eval_in_span(agent, code, config) do
-      {:ok, result} ->
-        messages = messages ++ [%{role: "user", content: format_result(result)}]
+    case eval_in_span(agent, code, config, bindings) do
+      {:ok, {result, new_bindings}} ->
+        messages = messages ++ [%{role: "user", content: format_result(result, new_bindings)}]
 
         if eval == "eval_and_continue",
-          do: loop(agent, messages, config, i + 1, 0),
+          do: loop(agent, messages, config, i + 1, 0, new_bindings),
           else: {:ok, result, messages}
 
       {:error, error} ->
-        handle_execution_error(agent, messages, config, error, i, retries)
+        handle_execution_error(agent, messages, config, error, i, retries, bindings)
     end
   end
 
-  defp handle_action(agent, messages, config, action, i, retries),
+  defp handle_action(agent, messages, config, action, i, retries, bindings),
     do:
       handle_execution_error(
         agent,
@@ -132,19 +133,20 @@ defmodule Legion.Executor do
         config,
         "Unexpected action: #{inspect(action)}",
         i,
-        retries
+        retries,
+        bindings
       )
 
-  defp eval_in_span(agent_module, code, config) do
+  defp eval_in_span(agent_module, code, config, bindings) do
     Telemetry.span([:legion, :sandbox, :eval], %{agent: agent_module, code: code}, fn ->
-      case Sandbox.execute(code, agent_module.tools(), config.sandbox_timeout) do
-        {:ok, value} -> {{:ok, value}, %{success: true, result: value}}
+      case Sandbox.execute(code, agent_module.tools(), config.sandbox_timeout, bindings) do
+        {:ok, {value, new_bindings}} -> {{:ok, {value, new_bindings}}, %{success: true, result: value}}
         {:error, error} -> {{:error, error}, %{success: false, error: error}}
       end
     end)
   end
 
-  defp handle_execution_error(agent_module, messages, config, error, iteration, retries) do
+  defp handle_execution_error(agent_module, messages, config, error, iteration, retries, bindings) do
     if retries >= config.max_retries do
       {:cancel, :reached_max_retries, messages}
     else
@@ -160,17 +162,25 @@ defmodule Legion.Executor do
             }
           ]
 
-      loop(agent_module, messages, config, iteration, retries + 1)
+      loop(agent_module, messages, config, iteration, retries + 1, bindings)
     end
   end
 
-  defp format_result(result) do
-    """
+  defp format_result(result, bindings) do
+    var_names = bindings |> Keyword.keys() |> Enum.map(&"`#{&1}`")
+
+    base = """
     Code executed successfully. Result:
     ```
     #{inspect(result, pretty: true, limit: 1000)}
     ```
     """
+
+    if var_names == [] do
+      base
+    else
+      base <> "\nAvailable variables: #{Enum.join(var_names, ", ")}"
+    end
   end
 
   defp format_error(%{message: msg}) when is_binary(msg), do: msg

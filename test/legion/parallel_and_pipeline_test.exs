@@ -144,6 +144,80 @@ defmodule Legion.ParallelAndPipelineTest do
     end
   end
 
+  describe "bindings persistence" do
+    test "variables persist across eval_and_continue steps within a turn" do
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+      stub(ReqLLM, :generate_object, fn _m, _msgs, _s ->
+        i = Agent.get_and_update(counter, fn n -> {n, n + 1} end)
+
+        case i do
+          0 ->
+            # Step 1: define a variable
+            {:ok,
+             %ReqLLM.Response{
+               id: "s1",
+               model: "test",
+               context: nil,
+               object: %{"action" => "eval_and_continue", "code" => "x = 42", "result" => ""}
+             }}
+
+          1 ->
+            # Step 2: use variable from step 1, should work because bindings persist
+            {:ok,
+             %ReqLLM.Response{
+               id: "s2",
+               model: "test",
+               context: nil,
+               object: %{"action" => "eval_and_complete", "code" => "x + 1", "result" => ""}
+             }}
+        end
+      end)
+
+      assert {:ok, 43} = Legion.execute(MathAgent, "test bindings")
+    end
+
+    test "available variables are listed in the result message" do
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      test_pid = self()
+
+      stub(ReqLLM, :generate_object, fn _m, messages, _s ->
+        i = Agent.get_and_update(counter, fn n -> {n, n + 1} end)
+
+        if i > 0 do
+          last_msg = messages |> List.last() |> Map.get(:content)
+          send(test_pid, {:result_msg, last_msg})
+        end
+
+        case i do
+          0 ->
+            {:ok,
+             %ReqLLM.Response{
+               id: "s1",
+               model: "test",
+               context: nil,
+               object: %{"action" => "eval_and_continue", "code" => "posts = [1, 2]", "result" => ""}
+             }}
+
+          1 ->
+            {:ok,
+             %ReqLLM.Response{
+               id: "s2",
+               model: "test",
+               context: nil,
+               object: %{"action" => "return", "code" => "", "result" => "done"}
+             }}
+        end
+      end)
+
+      assert {:ok, "done"} = Legion.execute(MathAgent, "test var listing")
+
+      assert_received {:result_msg, msg}
+      assert msg =~ "Available variables:"
+      assert msg =~ "`posts`"
+    end
+  end
+
   describe "then/3" do
     test "chains after a successful result" do
       test_pid = self()

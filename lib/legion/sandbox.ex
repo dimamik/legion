@@ -15,11 +15,9 @@ defmodule Legion.Sandbox do
 
   ## Examples
 
-      iex> Legion.Sandbox.execute("2 + 2")
-      {:ok, 4}
+      iex> {:ok, {4, _}} = Legion.Sandbox.execute("2 + 2")
 
-      iex> Legion.Sandbox.execute("Enum.sum([1, 2, 3])")
-      {:ok, 6}
+      iex> {:ok, {6, _}} = Legion.Sandbox.execute("Enum.sum([1, 2, 3])")
 
       iex> Legion.Sandbox.execute("System.halt()")
       {:error, "Module System is not allowed"}
@@ -37,16 +35,17 @@ defmodule Legion.Sandbox do
   (on top of the built-in safe modules). `timeout_ms` controls the maximum
   execution time (`:infinity` to disable).
 
-  Returns `{:ok, result}` on success, or `{:error, reason}` on validation
-  failure, runtime exception, crash, or timeout.
+  Returns `{:ok, {result, new_bindings}}` on success, or `{:error, reason}` on
+  validation failure, runtime exception, crash, or timeout. The returned
+  `new_bindings` can be passed to subsequent calls to preserve variable scope.
   """
-  def execute(code_string, allowed_modules \\ [], timeout_ms \\ 15_000)
+  def execute(code_string, allowed_modules \\ [], timeout_ms \\ 15_000, bindings \\ [])
       when is_binary(code_string) and is_list(allowed_modules) and
              (is_integer(timeout_ms) or timeout_ms == :infinity) do
     with :ok <- ASTChecker.check(code_string, allowed_modules) do
       code_string
       |> append_aliases(allowed_modules)
-      |> eval(timeout_ms)
+      |> eval(timeout_ms, bindings)
     end
   end
 
@@ -60,14 +59,15 @@ defmodule Legion.Sandbox do
   end
 
   # sobelow_skip ["RCE.CodeModule"]
-  defp eval(code_string, timeout_ms) do
+  defp eval(code_string, timeout_ms, bindings) do
     parent = self()
 
     {pid, ref} =
       spawn_monitor(fn ->
         result =
           try do
-            {:ok, code_string |> Code.eval_string() |> elem(0)}
+            {value, new_bindings} = Code.eval_string(code_string, bindings)
+            {:ok, {value, new_bindings}}
           rescue
             e -> {:error, e}
           end
