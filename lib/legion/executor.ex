@@ -66,7 +66,10 @@ defmodule Legion.Executor do
         %{agent: agent_module, iteration: iteration},
         fn ->
           {action, messages} = call_llm(agent_module, messages, config, iteration)
-          result = handle_action(agent_module, messages, config, action, iteration, retries, bindings)
+
+          result =
+            handle_action(agent_module, messages, config, action, iteration, retries, bindings)
+
           {result, %{action: action["action"]}}
         end
       )
@@ -110,7 +113,15 @@ defmodule Legion.Executor do
   defp handle_action(_agent, messages, _config, %{"action" => "done"}, _i, _r, _bindings),
     do: {:ok, nil, messages}
 
-  defp handle_action(agent, messages, config, %{"action" => eval, "code" => code}, i, retries, bindings)
+  defp handle_action(
+         agent,
+         messages,
+         config,
+         %{"action" => eval, "code" => code},
+         i,
+         retries,
+         bindings
+       )
        when eval in ["eval_and_continue", "eval_and_complete"] and code != "" do
     case eval_in_span(agent, code, config, bindings) do
       {:ok, {result, new_bindings}} ->
@@ -140,8 +151,11 @@ defmodule Legion.Executor do
   defp eval_in_span(agent_module, code, config, bindings) do
     Telemetry.span([:legion, :sandbox, :eval], %{agent: agent_module, code: code}, fn ->
       case Sandbox.execute(code, agent_module.tools(), config.sandbox_timeout, bindings) do
-        {:ok, {value, new_bindings}} -> {{:ok, {value, new_bindings}}, %{success: true, result: value}}
-        {:error, error} -> {{:error, error}, %{success: false, error: error}}
+        {:ok, {value, new_bindings}} ->
+          {{:ok, {value, new_bindings}}, %{success: true, result: value}}
+
+        {:error, error} ->
+          {{:error, error}, %{success: false, error: error}}
       end
     end)
   end

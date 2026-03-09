@@ -196,7 +196,11 @@ defmodule Legion.ParallelAndPipelineTest do
                id: "s1",
                model: "test",
                context: nil,
-               object: %{"action" => "eval_and_continue", "code" => "posts = [1, 2]", "result" => ""}
+               object: %{
+                 "action" => "eval_and_continue",
+                 "code" => "posts = [1, 2]",
+                 "result" => ""
+               }
              }}
 
           1 ->

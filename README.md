@@ -1,10 +1,8 @@
 # Legion
 
-> #### Warning {: .warning}
->
-> The project is in early stages of development. Expect breaking changes in future releases.
-
 <!-- MDOC -->
+
+> **Warning:** The project is in early stages of development. Expect breaking changes in future releases.
 
 Legion is an Elixir-native framework for building AI agents. Unlike traditional function-calling approaches, Legion agents generate and execute actual Elixir code, giving them the full power of the language while staying safely sandboxed.
 
