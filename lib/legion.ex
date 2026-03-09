@@ -1,114 +1,145 @@
 defmodule Legion do
-  @external_resource readme = Path.join([__DIR__, "../README.md"])
-
-  @moduledoc readme
+  @external_resource "README.md"
+  @moduledoc "README.md"
              |> File.read!()
              |> String.split("<!-- MDOC -->")
              |> Enum.fetch!(1)
 
-  alias Legion.{AgentServer, Executor}
+  alias Legion.AgentServer
 
   @doc """
-  Executes an agent with the given task synchronously.
+  Runs an agent on a single task and returns the result.
 
-  This is a one-off execution - the agent completes the task and returns.
-
-  ## Parameters
-    - agent_module: The agent module implementing Legion.AIAgent
-    - task: The task string for the agent to execute
-    - opts: Optional configuration overrides
-      - `:model` - LLM model to use (e.g., "openai:gpt-4o")
-      - `:timeout` - Request timeout in ms
-      - `:max_iterations` - Maximum successful iterations
-      - `:max_retries` - Maximum consecutive retries on error
-
-  ## Returns
-    - `{:ok, result}` - Agent completed successfully with result
-    - `{:cancel, :reached_max_iterations}` - Hit iteration limit
-    - `{:cancel, :reached_max_retries}` - Hit retry limit
-
-  ## Example
-
-      {:ok, result} = Legion.execute(MyApp.DataAgent, "Fetch and summarize https://example.com")
+  Starts a temporary agent process, blocks until the task completes, then stops it.
   """
-  @spec execute(module(), String.t(), keyword()) :: {:ok, any()} | {:cancel, atom()}
-  def execute(agent_module, task, opts \\ []) do
-    Executor.run(agent_module, task, opts)
+  def execute(agent_module, task) do
+    {:ok, pid} = AgentServer.start_link(agent_module)
+    result = AgentServer.call(pid, task)
+    GenServer.stop(pid)
+    result
   end
 
   @doc """
   Starts a long-lived agent process.
 
-  The agent maintains context between messages, allowing for
-  multi-turn conversations.
-
-  ## Parameters
-    - agent_module: The agent module implementing Legion.AIAgent
-    - initial_task: The initial task to start with
-    - opts: Optional configuration and GenServer options
-      - `:name` - GenServer name registration
-      - Plus any Legion.execute/3 options
-
-  ## Returns
-    - `{:ok, pid}` - Agent started successfully
-    - `{:error, reason}` - Failed to start
-
-  ## Example
-
-      {:ok, pid} = Legion.start_link(MyApp.AssistantAgent, "Hello, I need help with...")
+  ## Options
+    - `:name` - register the process under a name
+    - Any config overrides (`:model`, `:max_iterations`, etc.)
   """
-  @spec start_link(module(), String.t(), keyword()) :: GenServer.on_start()
-  def start_link(agent_module, initial_task, opts \\ []) do
-    AgentServer.start_link(agent_module, initial_task, opts)
+  def start_link(agent_module, opts \\ []) do
+    AgentServer.start_link(agent_module, opts)
   end
 
   @doc """
-  Sends an asynchronous message to a long-lived agent.
-
-  The message is added to the agent's context and processed.
-  Does not wait for a response.
-
-  ## Parameters
-    - agent: The agent pid or registered name
-    - message: The message to send
-
-  ## Returns
-    - `:ok`
-
-  ## Example
-
-      Legion.cast(agent_pid, "Please also check the footer section")
+  Sends a message to a running agent and waits for the result.
   """
-  @spec cast(GenServer.server(), String.t()) :: :ok
-  def cast(agent, message) do
-    AgentServer.cast(agent, message)
+  def call(pid, message, timeout \\ :infinity) do
+    AgentServer.call(pid, message, timeout)
   end
 
   @doc """
-  Sends a synchronous message to a long-lived agent.
-
-  Waits for the agent to process the message and return a result.
-  Can also be used to provide a human response using `{:respond, response}`.
-
-  ## Parameters
-    - agent: The agent pid or registered name
-    - message: The message to send (String or `{:respond, response}`)
-    - timeout: Optional timeout in ms (default: 30_000)
-
-  ## Returns
-    - `{:ok, result}` - Agent responded with result
-    - `{:cancel, reason}` - Agent hit limits
-    - `:ok` - Response delivered (when using `{:respond, response}`)
-    - `{:error, :no_pending_request}` - No pending human input request (when using `{:respond, response}`)
-
-  ## Example
-
-      {:ok, response} = Legion.call(agent_pid, "What did you find?")
-      :ok = Legion.call(agent_pid, {:respond, "Yes, proceed"})
+  Sends a message to a running agent without waiting for a result.
   """
-  @spec call(GenServer.server(), String.t() | {:respond, any()}, timeout()) ::
-          {:ok, any()} | {:cancel, atom()} | :ok | {:error, atom()}
-  def call(agent, message, timeout \\ 30_000) do
-    AgentServer.call(agent, message, timeout)
+  def cast(pid, message) do
+    AgentServer.cast(pid, message)
+  end
+
+  @doc """
+  Runs multiple agent tasks concurrently and collects results.
+
+  Returns `{:ok, results}` if all succeed, or the first `{:cancel, reason}`.
+
+  ## Examples
+
+      # Run two agents in parallel
+      {:ok, [research, analysis]} =
+        Legion.parallel([
+          {ResearchAgent, "Find recent Elixir blog posts"},
+          {AnalysisAgent, "Summarize market trends"}
+        ])
+
+      # With a timeout (in milliseconds)
+      {:ok, results} =
+        Legion.parallel(
+          [{FastAgent, "task 1"}, {FastAgent, "task 2"}],
+          30_000
+        )
+  """
+  def parallel(tasks, timeout \\ :infinity) when is_list(tasks) do
+    tasks
+    |> Enum.map(fn {agent, task} -> Task.async(fn -> execute(agent, task) end) end)
+    |> Task.await_many(timeout)
+    |> collect_results()
+  end
+
+  @doc """
+  Runs agent tasks sequentially, threading each result to the next step.
+
+  Each step is `{agent, task}` where `task` is a string or a function
+  that receives the previous result and returns a task string.
+
+  Halts early if any step returns `{:cancel, reason}`.
+
+  ## Examples
+
+      # Static tasks — each runs independently
+      {:ok, final} =
+        Legion.pipeline([
+          {ResearchAgent, "Find info about Elixir OTP"},
+          {WriterAgent, "Write a blog post about OTP"}
+        ])
+
+      # Thread results — each step receives the previous result
+      {:ok, post} =
+        Legion.pipeline([
+          {ResearchAgent, "Find recent Elixir news"},
+          {WriterAgent, fn research -> "Write a summary based on: \#{research}" end},
+          {EditorAgent, fn draft -> "Polish this draft: \#{draft}" end}
+        ])
+  """
+  def pipeline(steps) when is_list(steps) do
+    Enum.reduce_while(steps, {:ok, nil}, fn
+      {agent, task}, _acc when is_binary(task) ->
+        continue_or_halt(execute(agent, task))
+
+      {agent, fun}, {:ok, prev} when is_function(fun, 1) ->
+        continue_or_halt(execute(agent, fun.(prev)))
+    end)
+  end
+
+  @doc """
+  Chains an agent task after a previous result.
+
+  Useful for piping from `parallel/2` or `pipeline/1`.
+
+  ## Examples
+
+      # Chain after parallel
+      Legion.parallel([
+        {ResearchAgent, "Find Elixir news"},
+        {ResearchAgent, "Find Erlang news"}
+      ])
+      |> Legion.then(WriterAgent, fn results ->
+        "Summarize these findings: \#{inspect(results)}"
+      end)
+
+      # Passes through cancellations
+      {:cancel, reason} |> Legion.then(WriterAgent, fn _ -> "ignored" end)
+      #=> {:cancel, reason}
+  """
+  def then({:ok, result}, agent, fun) when is_function(fun, 1) do
+    execute(agent, fun.(result))
+  end
+
+  def then({:cancel, _} = cancelled, _agent, _fun), do: cancelled
+
+  defp continue_or_halt({:ok, _} = ok), do: {:cont, ok}
+  defp continue_or_halt({:cancel, _} = cancel), do: {:halt, cancel}
+
+  defp collect_results(results) do
+    case Enum.find(results, &match?({:cancel, _}, &1)) do
+      nil -> {:ok, Enum.map(results, fn {:ok, v} -> v end)}
+      cancel -> cancel
+    end
   end
 end

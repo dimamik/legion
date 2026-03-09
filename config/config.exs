@@ -1,12 +1,6 @@
 import Config
 
-config :legion,
-  model: "openai:gpt-4o-mini",
-  timeout: 30_000,
-  max_iterations: 10,
-  max_retries: 3,
-  sandbox: [
-    timeout: 5_000
-  ]
-
-import_config "#{config_env()}.exs"
+if config_env() == :test do
+  # This is needed for `Jason` source code to be stored during the compilation
+  config :legion, :extra_source_modules, [Jason]
+end

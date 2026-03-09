@@ -1,4 +1,14 @@
-# v0.1.0 - 2025-12-29
+# Changelog
+
+## v0.2.0 - unreleased
+
+### Changes
+
+- Simplified and refactored internals
+
+---
+
+## v0.1.0 - 2025-12-29
 
 ### New 🔥
 

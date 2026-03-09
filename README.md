@@ -1,6 +1,7 @@
 # Legion
 
-> [!WARNING]
+> #### Warning {: .warning}
+>
 > The project is in early stages of development. Expect breaking changes in future releases.
 
 <!-- MDOC -->
@@ -16,7 +17,7 @@ Legion is an Elixir-native framework for building AI agents. Unlike traditional 
 - **Long-lived Agents** - Maintain context across multi-turn conversations with `start_link/2`.
 - **Multi-Agent Systems** - Agents can orchestrate other agents, letting you create complex systems that will manage themselves.
 - **Human in the Loop** - Pause execution to request human input when needed
-- **Structured Output** - Define schemas to get typed, validated responses from agents, or omit types and operate on plain text. You have full conrol over prompts and schemas.
+- **Structured Output** - Define schemas to get typed, validated responses from agents, or omit types and operate on plain text. You have full control over prompts and schemas.
 - **Configurable** - Global defaults with per-agent overrides for model, timeouts, and limits
 - **Telemetry** - Built-in observability with events for calls, iterations, LLM requests, and more
 
@@ -27,7 +28,7 @@ Add `legion` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:legion, "~> 0.1"}
+    {:legion, "~> 0.2"}
   ]
 end
 ```
@@ -65,12 +66,16 @@ end
 
 ### 2. Define an Agent
 
+Agents are long or short-lived Elixir processes that maintain state and can be messaged.
+
 ```elixir
 defmodule MyApp.ResearchAgent do
   @moduledoc """
   Fetch posts, evaluate their relevance and quality, and save the good ones.
   """
-  use Legion.AIAgent, tools: [MyApp.Tools.ScraperTool, MyApp.Tools.DatabaseTool]
+  use Legion.Agent
+
+  def tools, do: [MyApp.Tools.ScraperTool, MyApp.Tools.DatabaseTool]
 end
 ```
 
@@ -124,11 +129,12 @@ Legion.cast(pid, "Also check the reviews")
 Configure Legion in your `config/config.exs`:
 
 ```elixir
-config :legion,
+config :legion, :config, %{
   model: "openai:gpt-4o",
-  timeout: 30_000,
   max_iterations: 10,
-  max_retries: 3
+  max_retries: 3,
+  sandbox_timeout: 60_000
+}
 ```
 
 - **Iterations** are successful execution steps - the agent fetches data, processes it, calls another tool, etc. Each productive action counts as one iteration.
@@ -138,12 +144,10 @@ Agents can override global settings:
 
 ```elixir
 defmodule MyApp.DataAgent do
-  use Legion.AIAgent, tools: [MyApp.HTTPTool]
+  use Legion.Agent
 
-  @impl true
-  def config do
-    %{model: "anthropic:claude-sonnet-4-20250514", max_iterations: 5}
-  end
+  def tools, do: [MyApp.HTTPTool]
+  def config, do: %{model: "anthropic:claude-sonnet-4-20250514", max_iterations: 5}
 end
 ```
 
@@ -151,12 +155,22 @@ end
 
 All callbacks are optional with sensible defaults:
 
+| Callback          | Default                 | Description                             |
+| ----------------- | ----------------------- | --------------------------------------- |
+| `tools/0`         | `[]`                    | Tool modules available to the agent     |
+| `description/0`   | `@moduledoc`            | Agent description for the system prompt |
+| `output_schema/0` | `%{"type" => "string"}` | JSON Schema for structured output       |
+| `tool_config/1`   | `[]`                    | Per-tool keyword config                 |
+| `system_prompt/0` | auto-generated          | Override the entire system prompt       |
+| `config/0`        | `%{}`                   | Model, timeouts, limits                 |
+
 ```elixir
 defmodule MyApp.DataAgent do
-  use Legion.AIAgent, tools: [MyApp.HTTPTool]
+  use Legion.Agent
+
+  def tools, do: [MyApp.HTTPTool]
 
   # Structured output schema
-  @impl true
   def output_schema do
     [
       summary: [type: :string, required: true],
@@ -165,24 +179,22 @@ defmodule MyApp.DataAgent do
   end
 
   # Additional instructions for the LLM
-  @impl true
   def system_prompt do
     "Always validate URLs before fetching. Prefer JSON responses."
   end
 
   # Pass options to specific tools (accessible via Vault)
-  @impl true
-  def tool_options(MyApp.HTTPTool), do: %{timeout: 10_000}
+  def tool_config(MyApp.HTTPTool), do: [timeout: 10_000]
 end
 ```
 
-## Human in the Loop
+## Human in the Loop tool
 
 Request human input during agent execution:
 
 ```elixir
-# Agent can use the built-in HumanTool
-Legion.Tools.HumanTool.ask("Should I proceed with this operation?")
+# Agent can use built-in HumanTool (if you allow it to)
+HumanTool.ask("Should I proceed with this operation?")
 
 # Your application responds
 Legion.call(agent_pid, {:respond, "Yes, proceed"})
@@ -194,12 +206,10 @@ Agents can spawn and communicate with other agents using the built-in `AgentTool
 
 ```elixir
 defmodule MyApp.OrchestratorAgent do
-  use Legion.AIAgent, tools: [Legion.Tools.AgentTool, MyApp.Tools.DatabaseTool]
+  use Legion.Agent
 
-  @impl true
-  def tool_options(Legion.Tools.AgentTool) do
-    %{allowed_agents: [MyApp.ResearchAgent, MyApp.WriterAgent]}
-  end
+  def tools, do: [Legion.Tools.AgentTool, MyApp.Tools.DatabaseTool]
+  def tool_config(Legion.Tools.AgentTool), do: [agents: [MyApp.ResearchAgent, MyApp.WriterAgent]]
 end
 ```
 
@@ -215,11 +225,39 @@ AgentTool.cast(pid, "Add a section about pattern matching")
 {:ok, draft} = AgentTool.call(pid, "Show me what you have so far")
 ```
 
+## Agent Pools
+
+Since agents are regular BEAM processes, you can use Erlang's `:pg` (process groups) to create agent pools with no external infrastructure:
+
+```elixir
+# Spawn a pool of support agents
+for _ <- 1..5 do
+  {:ok, pid} = Legion.start_link(SupportAgent)
+  :pg.join(:support_pool, pid)
+end
+
+# Route incoming tickets to the next available agent
+defp handle_ticket(ticket) do
+  pool = :pg.get_members(:support_pool)
+  agent = Enum.random(pool)
+  Legion.cast(agent, "Handle this support ticket: #{ticket}")
+end
+```
+
+## Hot Code Reloading
+
+Since tools and agents are regular Elixir modules, the BEAM's hot code reloading works out of the box. You can update tool implementations, swap agent behaviors, or add entirely new capabilities to running agents — without restarting the VM, without dropping conversations, without losing state.
+
 ## Telemetry
+
+```elixir
+Legion.Telemetry.attach_default_logger()
+```
 
 Legion emits telemetry events for observability:
 
-- `[:legion, :call, :start | :stop | :exception]` - agent call lifecycle
+- `[:legion, :agent, :started | :stopped]` - agent lifecycle
+- `[:legion, :agent, :message, :start | :stop]` - per-message lifecycle
 - `[:legion, :iteration, :start | :stop]` - each execution step
 - `[:legion, :llm, :request, :start | :stop]` - LLM API calls
 - `[:legion, :sandbox, :eval, :start | :stop]` - code evaluation

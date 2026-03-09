@@ -22,8 +22,6 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 legion-*.tar
 
-.env*
-
-.elixir_ls/
-.claude/
+.env
+.others/
 
