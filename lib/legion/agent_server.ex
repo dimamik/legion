@@ -93,7 +93,7 @@ defmodule Legion.AgentServer do
         [:legion, :agent, :message],
         %{agent: state.agent_module, message: msg},
         fn ->
-          messages = state.messages ++ [%{role: "user", content: msg}]
+          messages = state.messages ++ [%{role: "user", content: stringify(msg)}]
           prev_count = Enum.count(messages, &(&1[:role] == "assistant"))
           {_, _, msgs} = result = Executor.run(state.agent_module, messages, state.config)
           iterations = Enum.count(msgs, &(&1[:role] == "assistant")) - prev_count
@@ -103,6 +103,9 @@ defmodule Legion.AgentServer do
 
     {{status, value}, %{state | messages: final_messages}}
   end
+
+  defp stringify(msg) when is_binary(msg), do: msg
+  defp stringify(msg), do: inspect(msg, pretty: true, limit: :infinity)
 
   defp resolve_config(agent_module, opts) do
     app_config = Application.get_env(:legion, :config, %{})

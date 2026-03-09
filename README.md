@@ -1,6 +1,7 @@
 # Legion
 
-> [!WARNING]
+> #### Warning {: .warning}
+>
 > The project is in early stages of development. Expect breaking changes in future releases.
 
 <!-- MDOC -->
@@ -64,6 +65,8 @@ end
 ```
 
 ### 2. Define an Agent
+
+Agents are long or short-lived Elixir processes that maintain state and can be messaged.
 
 ```elixir
 defmodule MyApp.ResearchAgent do
@@ -185,13 +188,13 @@ defmodule MyApp.DataAgent do
 end
 ```
 
-## Human in the Loop
+## Human in the Loop tool
 
 Request human input during agent execution:
 
 ```elixir
-# Agent can use the built-in HumanTool
-Legion.Tools.HumanTool.ask("Should I proceed with this operation?")
+# Agent can use built-in HumanTool (if you allow it to)
+HumanTool.ask("Should I proceed with this operation?")
 
 # Your application responds
 Legion.call(agent_pid, {:respond, "Yes, proceed"})
@@ -221,6 +224,29 @@ end
 AgentTool.cast(pid, "Add a section about pattern matching")
 {:ok, draft} = AgentTool.call(pid, "Show me what you have so far")
 ```
+
+## Agent Pools
+
+Since agents are regular BEAM processes, you can use Erlang's `:pg` (process groups) to create agent pools with no external infrastructure:
+
+```elixir
+# Spawn a pool of support agents
+for _ <- 1..5 do
+  {:ok, pid} = Legion.start_link(SupportAgent)
+  :pg.join(:support_pool, pid)
+end
+
+# Route incoming tickets to the next available agent
+defp handle_ticket(ticket) do
+  pool = :pg.get_members(:support_pool)
+  agent = Enum.random(pool)
+  Legion.cast(agent, "Handle this support ticket: #{ticket}")
+end
+```
+
+## Hot Code Reloading
+
+Since tools and agents are regular Elixir modules, the BEAM's hot code reloading works out of the box. You can update tool implementations, swap agent behaviors, or add entirely new capabilities to running agents — without restarting the VM, without dropping conversations, without losing state.
 
 ## Telemetry
 

@@ -38,7 +38,8 @@ defmodule Legion.MixProject do
       {:telemetry, "~> 1.0"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
-      {:sobelow, ">= 0.0.0", only: [:dev, :test], runtime: false}
+      {:sobelow, ">= 0.0.0", only: [:dev, :test], runtime: false},
+      {:mimic, "~> 1.7", only: :test}
     ]
   end
 
@@ -59,8 +60,8 @@ defmodule Legion.MixProject do
       extras: ["README.md"],
       groups_for_modules: [
         Core: [Legion, Legion.Agent, Legion.Tool],
-        Runtime: [Legion.AgentServer, Legion.Executor, Legion.Sandbox],
-        Tools: [Legion.Tools.AgentTool],
+        Runtime: [Legion.AgentServer, Legion.Executor, ~r/^Legion\.Sandbox/],
+        Tools: [~r/^Legion\.Tools\./],
         Internals: [Legion.AgentPrompt, Legion.SourceRegistry, Legion.Telemetry]
       ]
     ]
