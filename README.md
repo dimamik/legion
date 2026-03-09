@@ -186,6 +186,29 @@ defmodule MyApp.DataAgent do
 end
 ```
 
+## Authorization
+
+To authorize tool calls for a specific user, put auth data into Vault before starting the agent and read it inside the tool. LLM-generated code has no access to Vault.
+
+```elixir
+# Before starting the agent
+Vault.init(:current_user, %{id: user.id})
+
+{:ok, result} = Legion.execute(MyApp.PostsAgent, "Find my posts from today and summarize them")
+```
+
+```elixir
+# Inside your tool
+defmodule MyApp.Tools.PostsTool do
+  use Legion.Tool
+
+  def get_my_posts do
+    %{id: user_id} = Vault.get(:current_user)
+    Repo.all(from p in Post, where: p.user_id == ^user_id)
+  end
+end
+```
+
 ## Human in the Loop tool
 
 Request human input during agent execution:
