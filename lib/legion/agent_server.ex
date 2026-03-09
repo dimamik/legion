@@ -94,8 +94,9 @@ defmodule Legion.AgentServer do
         %{agent: state.agent_module, message: msg},
         fn ->
           messages = state.messages ++ [%{role: "user", content: msg}]
+          prev_count = Enum.count(messages, &(&1[:role] == "assistant"))
           {_, _, msgs} = result = Executor.run(state.agent_module, messages, state.config)
-          iterations = Enum.count(msgs, &(&1[:role] == "assistant"))
+          iterations = Enum.count(msgs, &(&1[:role] == "assistant")) - prev_count
           {result, %{iterations: iterations}}
         end
       )

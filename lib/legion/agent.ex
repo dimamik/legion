@@ -66,6 +66,13 @@ defmodule Legion.Agent do
       def output_schema, do: %{"type" => "string"}
       def config, do: %{}
 
+      def child_spec(opts) do
+        %{
+          id: __MODULE__,
+          start: {Legion, :start_link, [__MODULE__, opts]}
+        }
+      end
+
       defoverridable tools: 0, system_prompt: 0, output_schema: 0, config: 0
     end
   end

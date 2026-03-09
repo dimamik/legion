@@ -40,7 +40,7 @@ defmodule Legion.Tool do
       @behaviour Legion.Tool
 
       def name do
-        unquote(__MODULE__)
+        __MODULE__
       end
 
       def description, do: unquote(source)

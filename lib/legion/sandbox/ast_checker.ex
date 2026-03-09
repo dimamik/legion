@@ -15,8 +15,8 @@ defmodule Legion.Sandbox.ASTChecker do
 
   Built-in safe modules: `Kernel`, `String`, `Enum`, `Map`, `MapSet`, `List`,
   `Keyword`, `Tuple`, `Integer`, `Float`, `Atom`, `Regex`, `Range`, `Access`,
-  `Stream`, `Date`, `DateTime`, `NaiveDateTime`, `Time`, `:erlang`, `:math`,
-  `:binary`, `:lists`, `:maps`, `:string`.
+  `Stream`, `Date`, `DateTime`, `NaiveDateTime`, `Time`, `:erlang` (with
+  dangerous functions blocked), `:math`, `:binary`, `:lists`, `:maps`, `:string`.
   """
 
   @builtin_allowed [
@@ -47,9 +47,11 @@ defmodule Legion.Sandbox.ASTChecker do
     :string
   ]
 
-  @forbidden_forms ~w(alias quote unquote defmodule defmacro defprotocol import require use send receive spawn spawn_link spawn_monitor)a
+  @forbidden_forms ~w(alias quote unquote defmodule defmacro defprotocol import require use send receive spawn spawn_link spawn_monitor apply)a
 
   @forbidden_kernel_functions ~w(spawn spawn_link spawn_monitor send apply exit)a
+
+  @forbidden_erlang_functions ~w(spawn spawn_link spawn_monitor send apply exit halt open_port ports port_command)a
 
   @doc """
   Validates `code_string` against the safety rules.
@@ -93,6 +95,9 @@ defmodule Legion.Sandbox.ASTChecker do
       module == Kernel and func in @forbidden_kernel_functions ->
         {node, {:error, "Kernel.#{func} is not allowed"}}
 
+      module == Kernel and func == :apply ->
+        {node, {:error, "Kernel.apply is not allowed"}}
+
       true ->
         {node, :ok}
     end
@@ -104,7 +109,7 @@ defmodule Legion.Sandbox.ASTChecker do
       mod not in allowed ->
         {node, {:error, "Module #{inspect(mod)} is not allowed"}}
 
-      mod == :erlang and func in @forbidden_kernel_functions ->
+      mod == :erlang and func in @forbidden_erlang_functions ->
         {node, {:error, ":erlang.#{func} is not allowed"}}
 
       true ->
