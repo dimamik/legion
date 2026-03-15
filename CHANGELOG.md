@@ -1,10 +1,11 @@
 # Changelog
 
-## v0.2.0 - unreleased
+## v0.2.0 - 2026-03-15
 
 ### Changes
 
 - Simplified and refactored internals
+- Improved documentation and general library intent
 
 ---
 

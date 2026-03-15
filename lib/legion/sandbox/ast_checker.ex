@@ -95,9 +95,6 @@ defmodule Legion.Sandbox.ASTChecker do
       module == Kernel and func in @forbidden_kernel_functions ->
         {node, {:error, "Kernel.#{func} is not allowed"}}
 
-      module == Kernel and func == :apply ->
-        {node, {:error, "Kernel.apply is not allowed"}}
-
       true ->
         {node, :ok}
     end

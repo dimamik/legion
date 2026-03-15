@@ -11,6 +11,11 @@ defmodule Legion do
   Runs an agent on a single task and returns the result.
 
   Starts a temporary agent process, blocks until the task completes, then stops it.
+
+  ## Examples
+
+      {:ok, summary} = Legion.execute(ResearchAgent, "Summarize the Elixir getting started guide")
+      {:cancel, :reached_max_iterations} = Legion.execute(ResearchAgent, "impossible task")
   """
   def execute(agent_module, task) do
     {:ok, pid} = AgentServer.start_link(agent_module)
@@ -25,6 +30,11 @@ defmodule Legion do
   ## Options
     - `:name` - register the process under a name
     - Any config overrides (`:model`, `:max_iterations`, etc.)
+
+  ## Examples
+
+      {:ok, pid} = Legion.start_link(AssistantAgent)
+      {:ok, pid} = Legion.start_link(AssistantAgent, name: MyAssistant, model: "openai:gpt-4o")
   """
   def start_link(agent_module, opts \\ []) do
     AgentServer.start_link(agent_module, opts)
@@ -32,6 +42,12 @@ defmodule Legion do
 
   @doc """
   Sends a message to a running agent and waits for the result.
+
+  ## Examples
+
+      {:ok, pid} = Legion.start_link(AssistantAgent)
+      {:ok, answer} = Legion.call(pid, "What is the capital of France?")
+      {:ok, follow_up} = Legion.call(pid, "And its population?")
   """
   def call(pid, message, timeout \\ :infinity) do
     AgentServer.call(pid, message, timeout)
@@ -39,6 +55,11 @@ defmodule Legion do
 
   @doc """
   Sends a message to a running agent without waiting for a result.
+
+  ## Examples
+
+      {:ok, pid} = Legion.start_link(ReportAgent)
+      Legion.cast(pid, "Generate the weekly report and email it")
   """
   def cast(pid, message) do
     AgentServer.cast(pid, message)

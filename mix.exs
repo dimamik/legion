@@ -1,18 +1,32 @@
 defmodule Legion.MixProject do
   use Mix.Project
 
+  @version "0.2.0"
+  @source_url "https://github.com/dimamik/legion"
+
   def project do
     [
       app: :legion,
-      version: "0.2.0",
+      version: @version,
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
+      aliases: aliases(),
+      # Hex
+      package: package(),
+      description: """
+      Legion is an Elixir framework for building multi-agent AI systems.
+      """,
+      # Docs
       name: "Legion",
-      source_url: "https://github.com/dimamik/legion",
-      docs: docs(),
-      aliases: aliases()
+      docs: [
+        main: "Legion",
+        source_ref: "v#{@version}",
+        source_url: @source_url,
+        extras: ["LICENSE", "CHANGELOG.md": [title: "Changelog"]],
+        groups_for_modules: groups_for_modules()
+      ]
     ]
   end
 
@@ -23,10 +37,18 @@ defmodule Legion.MixProject do
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger]
+    ]
+  end
+
+  defp groups_for_modules do
+    [
+      Core: [Legion, Legion.Agent, Legion.Tool],
+      Runtime: [Legion.AgentServer, Legion.Executor, ~r/^Legion\.Sandbox/],
+      Tools: [~r/^Legion\.Tools\./],
+      Internals: [Legion.AgentPrompt, Legion.SourceRegistry, Legion.Telemetry]
     ]
   end
 
@@ -43,26 +65,31 @@ defmodule Legion.MixProject do
     ]
   end
 
+  defp package do
+    [
+      maintainers: ["Dima Mikielewicz"],
+      licenses: ["MIT"],
+      links: %{
+        Website: "https://dimamik.com",
+        GitHub: @source_url
+      },
+      files: ~w(lib .formatter.exs mix.exs README* CHANGELOG* LICENSE*)
+    ]
+  end
+
   defp aliases do
     [
+      release: [
+        "cmd git tag v#{@version}",
+        "cmd git push",
+        "cmd git push --tags",
+        "hex.publish --yes"
+      ],
       ci: [
         "format --check-formatted",
         "credo --strict",
         "sobelow --exit --skip",
         "test --exclude integration"
-      ]
-    ]
-  end
-
-  defp docs do
-    [
-      main: "readme",
-      extras: ["README.md"],
-      groups_for_modules: [
-        Core: [Legion, Legion.Agent, Legion.Tool],
-        Runtime: [Legion.AgentServer, Legion.Executor, ~r/^Legion\.Sandbox/],
-        Tools: [~r/^Legion\.Tools\./],
-        Internals: [Legion.AgentPrompt, Legion.SourceRegistry, Legion.Telemetry]
       ]
     ]
   end

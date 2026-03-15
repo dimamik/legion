@@ -16,24 +16,52 @@ defmodule Legion.Tools.AgentTool do
 
   use Legion.Tool
 
-  @doc """
-  Executes a sub-agent with the given task and returns the result.
+  alias Legion.AgentServer
 
-  The sub-agent runs synchronously — this call blocks until
-  the sub-agent completes or is cancelled.
+  @doc """
+  Starts a long-lived sub-agent process and returns `{:ok, pid}`.
 
   Raises if the agent is not in the allowed list.
+  """
+  def start_link(agent_module, task) when is_atom(agent_module) and is_binary(task) do
+    check_allowed!(agent_module)
 
-  Returns `{:ok, result}` or `{:cancel, reason}`.
+    with {:ok, pid} <- AgentServer.start_link(agent_module) do
+      AgentServer.cast(pid, task)
+      {:ok, pid}
+    end
+  end
+
+  @doc """
+  Sends a fire-and-forget message to a running agent pid.
+  """
+  def cast(pid, message) when is_pid(pid) and is_binary(message) do
+    AgentServer.cast(pid, message)
+  end
+
+  @doc """
+  Executes a one-off task on a module, or sends a synchronous message to a running agent pid.
+
+  When called with a module, the sub-agent runs to completion and returns
+  `{:ok, result}` or `{:cancel, reason}`. Raises if the agent is not in the allowed list.
+
+  When called with a pid, sends a message to the running agent and blocks for the reply.
   """
   def call(agent_module, task) when is_atom(agent_module) and is_binary(task) do
+    check_allowed!(agent_module)
+    Legion.execute(agent_module, task)
+  end
+
+  def call(pid, message) when is_pid(pid) and is_binary(message) do
+    AgentServer.call(pid, message)
+  end
+
+  defp check_allowed!(agent_module) do
     allowed = Vault.get(__MODULE__, [])[:agents] || []
 
     unless agent_module in allowed do
       raise ArgumentError,
             "agent #{inspect(agent_module)} is not allowed; allowed agents: #{inspect(allowed)}"
     end
-
-    Legion.execute(agent_module, task)
   end
 end

@@ -97,11 +97,11 @@ defmodule Legion.AgentServer do
           prev_count = Enum.count(messages, &(&1[:role] == "assistant"))
           initial_bindings = if state.config[:share_bindings], do: state.bindings, else: []
 
-          {status, value, msgs, _final_bindings} =
+          {status, value, msgs, bindings} =
             result = Executor.run(state.agent_module, messages, state.config, initial_bindings)
 
           iterations = Enum.count(msgs, &(&1[:role] == "assistant")) - prev_count
-          {result, %{iterations: iterations, status: status, result: value}}
+          {result, %{iterations: iterations, status: status, result: value, bindings: bindings}}
         end
       )
 

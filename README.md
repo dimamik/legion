@@ -1,42 +1,13 @@
 # Legion
 
+[![CI](https://github.com/dimamik/legion/actions/workflows/ci.yml/badge.svg)](https://github.com/dimamik/legion/actions/workflows/ci.yml)
+[![License](https://img.shields.io/hexpm/l/legion.svg)](https://github.com/dimamik/legion/blob/main/LICENSE)
+[![Version](https://img.shields.io/hexpm/v/legion.svg)](https://hex.pm/packages/legion)
+[![Hex Docs](https://img.shields.io/badge/documentation-gray.svg)](https://hexdocs.pm/legion)
+
 <!-- MDOC -->
 
-> **Warning:** The project is in early stages of development. Expect breaking changes in future releases.
-
 Legion is an Elixir-native framework for building AI agents. Unlike traditional function-calling approaches, Legion agents generate and execute actual Elixir code, giving them the full power of the language while staying safely sandboxed.
-
-## Features
-
-- **Code Generation over Function Calling** - Agents write expressive Elixir pipelines instead of making dozens of tool-call round-trips. This makes your agents smarter and reduces amount of tokens being used. [See anthropic post about this](https://www.anthropic.com/engineering/code-execution-with-mcp).
-- **Sandboxed Execution** - Generated code runs in a restricted environment with controlled access to tools. You can define memory, time, and call limits.
-- **Simple Tool Definition** - Expose any Elixir module as a tool with `use Legion.Tool`. You can reuse your existing app logic.
-- **Authorization baked in** - The safest way to authorize tool calls via [`Vault`](https://github.com/dimamik/vault) library. Put all data needed to authorize LLM call before starting Agent, and validate it inside the tool call. Everything will be available due to the `Vault`'s nature.
-- **Long-lived Agents** - Maintain context across multi-turn conversations with `start_link/2`.
-- **Multi-Agent Systems** - Agents can orchestrate other agents, letting you create complex systems that will manage themselves.
-- **Human in the Loop** - Pause execution to request human input when needed
-- **Structured Output** - Define schemas to get typed, validated responses from agents, or omit types and operate on plain text. You have full control over prompts and schemas.
-- **Configurable** - Global defaults with per-agent overrides for model, timeouts, and limits
-- **Telemetry** - Built-in observability with events for calls, iterations, LLM requests, and more
-
-## Installation
-
-Add `legion` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:legion, "~> 0.2"}
-  ]
-end
-```
-
-Configure your LLM API key (see [req_llm configuration](https://hexdocs.pm/req_llm/ReqLLM.html#module-configuration) for all options):
-
-```elixir
-# config/runtime.exs
-config :req_llm, openai_api_key: System.get_env("OPENAI_API_KEY")
-```
 
 ## Quick Start
 
@@ -84,6 +55,39 @@ end
 # => {:ok, "Found 3 relevant posts and saved 2 that met quality criteria."}
 ```
 
+## Features
+
+- **Code Generation over Function Calling** - Agents write Elixir code instead of making dozens of tool-call round-trips. This makes them smarter and reduces the amount of tokens used. [See anthropic post about this](https://www.anthropic.com/engineering/code-execution-with-mcp).
+- **Sandboxed Execution** - Generated code runs in a restricted environment with controlled access to tools. You have full control over which tools are exposed to which agents, and you can monitor agent behavior using the [`legion_web`](https://github.com/dimamik/legion_web) dashboard.
+- **Simple Tool Definition** - Expose any Elixir module as a tool with `use Legion.Tool`. This allows you to reuse your existing app's logic. If you want to expose a third-party module as a set of tools, you can do that too.
+- **Authorization baked in** - The safest way to authorize tool calls via the [`Vault`](https://github.com/dimamik/vault) library. Put all data needed to authorize an LLM call before starting the agent, and validate it inside the tool call. Everything will be available due to `Vault`'s nature.
+- **Long-lived Agents** - Treat your agents as [GenServers](https://hexdocs.pm/elixir/GenServer.html), context is preserved naturally. Start your agent with `Legion.start_link/2`, just as you'd start a [GenServer](https://hexdocs.pm/elixir/GenServer.html). Agents can reference variables across turns (tasks) — just use the `share_bindings: true` option.
+- **Multi-Agent Systems** - Agents can orchestrate other agents, letting you create complex systems that manage themselves. Agents spawn other agents as linked processes — when a parent dies, all children are stopped too. Your agent is just another BEAM process.
+- **Human in the Loop** - Human-in-the-loop is just a built-in tool called `HumanTool`. You could have written it yourself, but I wrote it for you. It just blocks the agent's execution until it receives a message from the user. Simple as that.
+- **Structured Output** - Define schemas to get typed, validated responses from agents, or omit types and operate on plain text. You have full control over prompts and schemas.
+- **Configurable** - Global defaults with per-agent overrides for model, timeouts, and limits
+- **Telemetry** - Built-in observability with events for calls, iterations, LLM requests, and more
+- **All BEAM/Elixir features** - Since it's built on top of raw processes, everything that works with processes would work with Legion. In that: process groups, hot code reloading, processes being super lightweight and isolated, and many many more.
+
+## Installation
+
+Add `legion` to your list of dependencies in `mix.exs`:
+
+```elixir
+def deps do
+  [
+    {:legion, "~> 0.2"}
+  ]
+end
+```
+
+Configure your LLM API key (see [req_llm configuration](https://hexdocs.pm/req_llm/ReqLLM.html#module-configuration) for all options):
+
+```elixir
+# config/runtime.exs
+config :req_llm, openai_api_key: System.get_env("OPENAI_API_KEY")
+```
+
 ## How It Works
 
 When you ask an agent: _"Find cool Elixir posts about Advent of Code and save them"_
@@ -128,7 +132,7 @@ Configure Legion in your `config/config.exs`:
 
 ```elixir
 config :legion, :config, %{
-  model: "openai:gpt-4o",
+  model: "openai:gpt-4o-mini",
   max_iterations: 10,
   max_retries: 3,
   sandbox_timeout: 60_000,
@@ -287,6 +291,26 @@ Legion emits telemetry events for observability:
 - `[:legion, :human, :input_required | :input_received]` - human-in-the-loop
 
 Plus, Legion emits `Req` telemetry events for HTTP requests.
+
+## Limitations
+
+### Sandboxing
+
+Legion's sandbox restricts what LLM-generated code can do — but it is not a full process isolation sandbox **yet**. Generated code runs inside the same BEAM VM as your application.
+
+What the sandbox does:
+
+- Blocks dangerous language constructs: `defmodule`, `import`, `spawn`, `send`, `receive`, `apply`, etc.
+- Restricts module access to an explicit allowlist (standard library + your tools)
+- Kills the evaluation process if it exceeds `sandbox_timeout`
+
+What it does **not** do:
+
+- Isolate memory — runaway allocations affect the whole VM
+- Prevent atom table exhaustion — `String.to_atom/1` is available and atoms are never garbage collected
+- Restrict access to the BEAM node name, process pid, or refs via `Kernel` functions
+
+**The practical implication:** Legion is designed for trusted code generators (your own LLM-backed agents with controlled tool access), not for running arbitrary untrusted code from unknown sources. If your threat model requires full process isolation, you might want to spawn legion agents in an isolated BEAM instance.
 
 <!-- MDOC -->
 

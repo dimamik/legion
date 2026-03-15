@@ -5,8 +5,8 @@ defmodule Legion.Executor do
   Given a complete message history, calls the LLM, parses its response, runs
   sandboxed code if needed, and recurses until the LLM signals completion.
 
-  Pure function — no processes, no state. Returns the final result and updated
-  message history so the caller can persist context across turns.
+  Returns the final result and updated message history so the caller can persist
+  context across turns.
   """
 
   alias Legion.{Sandbox, Telemetry}
@@ -151,7 +151,7 @@ defmodule Legion.Executor do
 
   defp eval_in_span(agent_module, code, config, bindings) do
     Telemetry.span([:legion, :sandbox, :eval], %{agent: agent_module, code: code}, fn ->
-      case Sandbox.execute(code, agent_module.tools(), config.sandbox_timeout, bindings) do
+      case Sandbox.execute(code, config.sandbox_timeout, agent_module.tools(), bindings) do
         {:ok, {value, new_bindings}} ->
           {{:ok, {value, new_bindings}}, %{success: true, result: value}}
 
