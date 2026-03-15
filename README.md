@@ -131,12 +131,14 @@ config :legion, :config, %{
   model: "openai:gpt-4o",
   max_iterations: 10,
   max_retries: 3,
-  sandbox_timeout: 60_000
+  sandbox_timeout: 60_000,
+  share_bindings: false
 }
 ```
 
 - **Iterations** are successful execution steps - the agent fetches data, processes it, calls another tool, etc. Each productive action counts as one iteration.
 - **Retries** are consecutive failures - when the LLM generates invalid code or a tool raises an error. The counter resets after each successful iteration.
+- **share_bindings** — when `true`, variable bindings from code execution carry over between turns in a long-lived agent. For example, if the LLM assigns `posts = ScraperTool.fetch_posts()` in one turn, the `posts` variable will be available in the next turn. Defaults to `false` (each turn starts with a clean slate).
 
 Agents can override global settings:
 

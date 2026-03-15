@@ -16,7 +16,7 @@ defmodule Legion.AgentServer do
 
   alias Legion.{Executor, Telemetry}
 
-  defstruct [:agent_module, :messages, :config]
+  defstruct [:agent_module, :messages, :config, bindings: []]
 
   # Client API
 
@@ -88,20 +88,24 @@ defmodule Legion.AgentServer do
   end
 
   defp handle_message(msg, state) do
-    {status, value, final_messages} =
+    {status, value, final_messages, final_bindings} =
       Telemetry.span(
         [:legion, :agent, :message],
         %{agent: state.agent_module, message: msg},
         fn ->
           messages = state.messages ++ [%{role: "user", content: stringify(msg)}]
           prev_count = Enum.count(messages, &(&1[:role] == "assistant"))
-          {_, _, msgs} = result = Executor.run(state.agent_module, messages, state.config)
+          initial_bindings = if state.config[:share_bindings], do: state.bindings, else: []
+
+          {status, value, msgs, _final_bindings} =
+            result = Executor.run(state.agent_module, messages, state.config, initial_bindings)
+
           iterations = Enum.count(msgs, &(&1[:role] == "assistant")) - prev_count
-          {result, %{iterations: iterations}}
+          {result, %{iterations: iterations, status: status, result: value}}
         end
       )
 
-    {{status, value}, %{state | messages: final_messages}}
+    {{status, value}, %{state | messages: final_messages, bindings: final_bindings}}
   end
 
   defp stringify(msg) when is_binary(msg), do: msg

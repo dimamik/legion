@@ -15,7 +15,8 @@ defmodule Legion.Executor do
     model: "openai:gpt-4o-mini",
     max_iterations: 10,
     max_retries: 3,
-    sandbox_timeout: 60_000
+    sandbox_timeout: 60_000,
+    share_bindings: false
   }
 
   defp action_schema(agent_module) do
@@ -50,16 +51,16 @@ defmodule Legion.Executor do
 
   `messages` must already include the system prompt and the current user message.
 
-  Returns `{:ok, result, messages}` or `{:cancel, reason, messages}`.
+  Returns `{:ok, result, messages, bindings}` or `{:cancel, reason, messages, bindings}`.
   """
-  def run(agent_module, messages, config) do
+  def run(agent_module, messages, config, bindings \\ []) do
     config = Map.merge(@default_config, config)
-    loop(agent_module, messages, config, 0, 0, _bindings = [])
+    loop(agent_module, messages, config, 0, 0, bindings)
   end
 
   defp loop(agent_module, messages, config, iteration, retries, bindings) do
     if iteration >= config.max_iterations do
-      {:cancel, :reached_max_iterations, messages}
+      {:cancel, :reached_max_iterations, messages, bindings}
     else
       Telemetry.span(
         [:legion, :iteration],
@@ -90,7 +91,7 @@ defmodule Legion.Executor do
           {:ok, response} ->
             action = response.object
             msgs = messages ++ [%{role: "assistant", content: Jason.encode!(action)}]
-            {{action, msgs}, %{}}
+            {{action, msgs}, %{object: action}}
 
           {:error, reason} ->
             raise "LLM request failed: #{inspect(reason)}"
@@ -106,12 +107,12 @@ defmodule Legion.Executor do
          %{"action" => "return", "result" => result},
          _i,
          _r,
-         _bindings
+         bindings
        ),
-       do: {:ok, result, messages}
+       do: {:ok, result, messages, bindings}
 
-  defp handle_action(_agent, messages, _config, %{"action" => "done"}, _i, _r, _bindings),
-    do: {:ok, nil, messages}
+  defp handle_action(_agent, messages, _config, %{"action" => "done"}, _i, _r, bindings),
+    do: {:ok, nil, messages, bindings}
 
   defp handle_action(
          agent,
@@ -129,7 +130,7 @@ defmodule Legion.Executor do
 
         if eval == "eval_and_continue",
           do: loop(agent, messages, config, i + 1, 0, new_bindings),
-          else: {:ok, result, messages}
+          else: {:ok, result, messages, new_bindings}
 
       {:error, error} ->
         handle_execution_error(agent, messages, config, error, i, retries, bindings)
@@ -162,7 +163,7 @@ defmodule Legion.Executor do
 
   defp handle_execution_error(agent_module, messages, config, error, iteration, retries, bindings) do
     if retries >= config.max_retries do
-      {:cancel, :reached_max_retries, messages}
+      {:cancel, :reached_max_retries, messages, bindings}
     else
       error_text = format_error(error)
 

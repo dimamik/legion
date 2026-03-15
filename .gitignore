@@ -23,5 +23,3 @@ erl_crash.dump
 legion-*.tar
 
 .env
-.others/
-

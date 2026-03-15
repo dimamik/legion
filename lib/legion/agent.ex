@@ -34,8 +34,14 @@ defmodule Legion.Agent do
     - `output_schema/0` — JSON Schema map describing the agent's structured output.
       Used by the LLM for the `result` field. Defaults to `%{"type" => "string"}`.
 
-    - `config/0` — agent-level configuration (model, max_iterations, etc.) merged
-      with application config and call-time opts. Defaults to `%{}`.
+    - `config/0` — agent-level configuration merged with application config and
+      call-time opts. Defaults to `%{}`. Available keys:
+      - `model` — LLM model identifier (default: `"openai:gpt-4o-mini"`)
+      - `max_iterations` — max successful execution steps per turn (default: `10`)
+      - `max_retries` — max consecutive failures before giving up (default: `3`)
+      - `sandbox_timeout` — timeout in ms for code execution (default: `60_000`)
+      - `share_bindings` — when `true`, variable bindings persist across turns
+        in a long-lived agent (default: `false`)
   """
 
   @callback tools() :: [module()]

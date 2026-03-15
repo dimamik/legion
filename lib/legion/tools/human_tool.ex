@@ -28,6 +28,7 @@ defmodule Legion.Tools.HumanTool do
   Asks a human a question and blocks until they respond.
 
   Returns the human's answer as a string.
+  Use this tool with `eval_and_continue`.
   """
   def ask(question) when is_binary(question) do
     config = Vault.get(__MODULE__, [])
