@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.1 - 2026-03-24
+
+- Improve source code extraction for tool definitions
+- Adjust system prompt to better reflect capabilities
+
+
 ## v0.2.0 - 2026-03-15
 
 ### Changes
