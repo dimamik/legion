@@ -34,7 +34,7 @@ defmodule Legion.Tool do
   @callback description() :: String.t()
 
   defmacro __using__(_opts) do
-    source = File.read!(__CALLER__.file)
+    source = extract_module_source(File.read!(__CALLER__.file), __CALLER__.module)
 
     quote do
       @behaviour Legion.Tool
@@ -47,5 +47,54 @@ defmodule Legion.Tool do
 
       defoverridable description: 0
     end
+  end
+
+  # NOTE: returns the whole file for nested modules
+  @doc false
+  def extract_module_source(code, module) do
+    module_header = "defmodule #{inspect(module)} do"
+    lines = String.split(code, "\n")
+
+    case Enum.find_index(lines, &String.contains?(&1, module_header)) do
+      nil ->
+        code
+
+      start_idx ->
+        lines
+        |> Enum.drop(start_idx)
+        |> extract_do_end_block()
+        |> Enum.join("\n")
+    end
+  end
+
+  defp extract_do_end_block(lines) do
+    Enum.reduce_while(lines, {[], 0}, fn line, {acc, depth} ->
+      depth = depth + count_opens(line) - count_closes(line)
+
+      if depth == 0 and acc != [] do
+        {:halt, {Enum.reverse([line | acc]), depth}}
+      else
+        {:cont, {[line | acc], depth}}
+      end
+    end)
+    |> elem(0)
+  end
+
+  defp count_opens(line) do
+    line = strip_strings_and_comments(line)
+    dos = length(Regex.scan(~r/\bdo\s*$/, line))
+    fns = length(Regex.scan(~r/\bfn\b/, line))
+    dos + fns
+  end
+
+  defp count_closes(line) do
+    line = strip_strings_and_comments(line)
+    length(Regex.scan(~r/\bend\b/, line))
+  end
+
+  defp strip_strings_and_comments(line) do
+    line
+    |> String.replace(~r/#.*$/, "")
+    |> String.replace(~r/"(?:[^"\\]|\\.)*"/, "")
   end
 end

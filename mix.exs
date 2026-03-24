@@ -22,8 +22,11 @@ defmodule Legion.MixProject do
       name: "Legion",
       docs: [
         main: "Legion",
+        api_reference: false,
         source_ref: "v#{@version}",
         source_url: @source_url,
+        extra_section: "GUIDES",
+        formatters: ["html"],
         extras: ["LICENSE", "CHANGELOG.md": [title: "Changelog"]],
         groups_for_modules: groups_for_modules()
       ]
@@ -71,6 +74,7 @@ defmodule Legion.MixProject do
       licenses: ["MIT"],
       links: %{
         Website: "https://dimamik.com",
+        Changelog: "#{@source_url}/blob/main/CHANGELOG.md",
         GitHub: @source_url
       },
       files: ~w(lib .formatter.exs mix.exs README* CHANGELOG* LICENSE*)
@@ -87,6 +91,7 @@ defmodule Legion.MixProject do
       ],
       ci: [
         "format --check-formatted",
+        "deps.unlock --check-unused",
         "credo --strict",
         "sobelow --exit --skip",
         "test --exclude integration"
