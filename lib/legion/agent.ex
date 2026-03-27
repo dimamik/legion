@@ -42,6 +42,11 @@ defmodule Legion.Agent do
       - `sandbox_timeout` — timeout in ms for code execution (default: `60_000`)
       - `share_bindings` — when `true`, variable bindings persist across turns
         in a long-lived agent (default: `false`)
+
+    - `action_types/0` — list of action strings the LLM is allowed to respond with.
+      Defaults to all four: `~w(eval_and_continue eval_and_complete return done)`.
+      Override to restrict the agent - for example, a read-only agent that should
+      never execute code can use `~w(return done)`.
   """
 
   @callback tools() :: [module()]
@@ -49,11 +54,13 @@ defmodule Legion.Agent do
   @callback system_prompt() :: String.t()
   @callback output_schema() :: map()
   @callback config() :: map()
+  @callback action_types() :: [String.t()]
   @optional_callbacks tools: 0,
                       tool_config: 1,
                       system_prompt: 0,
                       output_schema: 0,
-                      config: 0
+                      config: 0,
+                      action_types: 0
 
   defmacro __using__(_opts) do
     quote do
@@ -71,6 +78,7 @@ defmodule Legion.Agent do
       def system_prompt, do: Legion.AgentPrompt.system_prompt(__MODULE__)
       def output_schema, do: %{"type" => "string"}
       def config, do: %{}
+      def action_types, do: ~w(eval_and_continue eval_and_complete return done)
 
       def child_spec(opts) do
         %{
@@ -79,7 +87,11 @@ defmodule Legion.Agent do
         }
       end
 
-      defoverridable tools: 0, system_prompt: 0, output_schema: 0, config: 0
+      defoverridable tools: 0,
+                     system_prompt: 0,
+                     output_schema: 0,
+                     config: 0,
+                     action_types: 0
     end
   end
 

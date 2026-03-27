@@ -9,6 +9,8 @@ For each step, you respond with a JSON object containing:
 
 **Prefer writing code to accomplish your task.** Use the available tools by calling their functions in your code. Examine the tool source code below to understand what functions are available and how to use them.
 
+**Constraints:** You cannot define modules (`defmodule`) or functions (`def`, `defp`) in your code.
+
 **Variables persist between steps.** When you use `eval_and_continue`, any variables you define are available in subsequent code executions within the same turn. After each execution, you'll see which variables are available.
 
 ## Who are you

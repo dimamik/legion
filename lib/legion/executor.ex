@@ -19,7 +19,20 @@ defmodule Legion.Executor do
     share_bindings: false
   }
 
+  @action_descriptions %{
+    "eval_and_continue" => "Execute code and continue. Use when you need the result to proceed.",
+    "eval_and_complete" => "Execute code and return its result as the final answer.",
+    "return" => "Return a structured result without code execution.",
+    "done" => "Task complete with no result to return."
+  }
+
   defp action_schema(agent_module) do
+    types = agent_module.action_types()
+
+    description =
+      types
+      |> Enum.map_join("\n", fn t -> "- \"#{t}\": #{@action_descriptions[t]}" end)
+
     %{
       "type" => "object",
       "required" => ["action", "code", "result"],
@@ -27,14 +40,8 @@ defmodule Legion.Executor do
       "properties" => %{
         "action" => %{
           "type" => "string",
-          "enum" => ["eval_and_continue", "eval_and_complete", "return", "done"],
-          "description" => """
-          The action to take:
-          - "eval_and_continue": Execute code and continue. Use when you need the result to proceed.
-          - "eval_and_complete": Execute code and return its result as the final answer.
-          - "return": Return a structured result without code execution. Use when you have all the information needed.
-          - "done": Task complete with no result to return.
-          """
+          "enum" => types,
+          "description" => "The action to take:\n" <> description
         },
         "code" => %{
           "type" => "string",
@@ -65,16 +72,32 @@ defmodule Legion.Executor do
       Telemetry.span(
         [:legion, :iteration],
         %{agent: agent_module, iteration: iteration},
-        fn ->
-          {action, messages} = call_llm(agent_module, messages, config, iteration)
-
-          result =
-            handle_action(agent_module, messages, config, action, iteration, retries, bindings)
-
-          {result, %{action: action["action"]}}
-        end
+        fn -> iterate(agent_module, messages, config, iteration, retries, bindings) end
       )
     end
+  end
+
+  defp iterate(agent_module, messages, config, iteration, retries, bindings) do
+    {action, messages} = call_llm(agent_module, messages, config, iteration)
+
+    result =
+      case validate_action_type(agent_module, action) do
+        :ok ->
+          handle_action(agent_module, messages, config, action, iteration, retries, bindings)
+
+        {:error, reason} ->
+          handle_execution_error(
+            agent_module,
+            messages,
+            config,
+            reason,
+            iteration,
+            retries,
+            bindings
+          )
+      end
+
+    {result, %{action: action["action"]}}
   end
 
   defp call_llm(agent_module, messages, config, iteration) do
@@ -89,7 +112,7 @@ defmodule Legion.Executor do
       fn ->
         case ReqLLM.generate_object(config.model, messages, action_schema(agent_module)) do
           {:ok, response} ->
-            action = response.object
+            action = extract_object(response)
             msgs = messages ++ [%{role: "assistant", content: Jason.encode!(action)}]
             {{action, msgs}, %{object: action}}
 
@@ -151,7 +174,9 @@ defmodule Legion.Executor do
 
   defp eval_in_span(agent_module, code, config, bindings) do
     Telemetry.span([:legion, :sandbox, :eval], %{agent: agent_module, code: code}, fn ->
-      case Sandbox.execute(code, config.sandbox_timeout, agent_module.tools(), bindings) do
+      allowed = agent_module.tools()
+
+      case Sandbox.execute(code, config.sandbox_timeout, allowed, bindings) do
         {:ok, {value, new_bindings}} ->
           {{:ok, {value, new_bindings}}, %{success: true, result: value}}
 
@@ -180,6 +205,27 @@ defmodule Legion.Executor do
       loop(agent_module, messages, config, iteration, retries + 1, bindings)
     end
   end
+
+  defp validate_action_type(agent_module, %{"action" => action_type}) do
+    allowed = agent_module.action_types()
+
+    if action_type in allowed do
+      :ok
+    else
+      {:error,
+       "Action #{inspect(action_type)} is not allowed for #{inspect(agent_module)}. " <>
+         "Allowed: #{inspect(allowed)}"}
+    end
+  end
+
+  defp extract_object(%{object: object}) when is_map(object), do: object
+
+  defp extract_object(%{message: %{tool_calls: tool_calls}}) when is_list(tool_calls) do
+    ReqLLM.ToolCall.find_args(tool_calls, "structured_output") ||
+      raise "LLM response contained no structured object"
+  end
+
+  defp extract_object(_response), do: raise("LLM response contained no structured object")
 
   defp format_result(result, bindings) do
     var_names = bindings |> Keyword.keys() |> Enum.map(&"`#{&1}`")
