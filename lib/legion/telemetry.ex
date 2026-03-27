@@ -170,7 +170,11 @@ defmodule Legion.Telemetry do
   end
 
   def handle_event([:legion, :agent, :message, :start], _measurements, meta, opts) do
-    msg = String.slice(meta.message, 0, 80)
+    msg =
+      if is_binary(meta.message),
+        do: String.slice(meta.message, 0, 80),
+        else: inspect(meta.message, limit: 5)
+
     log(opts, meta, "message:start #{short(meta.agent)} #{inspect(msg)}")
   end
 

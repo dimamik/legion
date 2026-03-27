@@ -15,6 +15,7 @@ defmodule Legion.AgentServer do
   use GenServer
 
   alias Legion.{Executor, Telemetry}
+  alias ReqLLM.Message.ContentPart
 
   defstruct [:agent_module, :messages, :config, bindings: []]
 
@@ -109,6 +110,17 @@ defmodule Legion.AgentServer do
   end
 
   defp stringify(msg) when is_binary(msg), do: msg
+
+  defp stringify({:image, data, media_type}) when is_binary(data) and is_binary(media_type) do
+    [ContentPart.image(data, media_type)]
+  end
+
+  defp stringify({:image_url, url}) when is_binary(url) do
+    [ContentPart.image_url(url)]
+  end
+
+  defp stringify({:multipart, parts}) when is_list(parts), do: parts
+
   defp stringify(msg), do: inspect(msg, pretty: true, limit: :infinity)
 
   defp resolve_config(agent_module, opts) do
