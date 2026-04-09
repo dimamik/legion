@@ -8,7 +8,7 @@ defmodule Legion.Sandbox.ASTChecker do
   - **Forbidden forms** — language constructs that could escape the sandbox:
     `alias`, `import`, `require`, `use`, `quote`/`unquote`, `defmodule`,
     `defmacro`, `defprotocol`, `send`, `receive`, `spawn`, `spawn_link`,
-    `spawn_monitor`.
+    `spawn_monitor`, `__ENV__`.
   - **Disallowed module calls** — any `Module.function()` or `:erlang_mod.function()`
     call where the module is not in the built-in safe list or the caller-supplied
     allow-list.
@@ -47,11 +47,11 @@ defmodule Legion.Sandbox.ASTChecker do
     :string
   ]
 
-  @forbidden_forms ~w(alias quote unquote defmodule defmacro defprotocol import require use send receive spawn spawn_link spawn_monitor apply)a
+  @forbidden_forms ~w(alias quote unquote defmodule defmacro defprotocol import require use send receive spawn spawn_link spawn_monitor apply __ENV__)a
 
   @forbidden_kernel_functions ~w(spawn spawn_link spawn_monitor send apply exit)a
 
-  @forbidden_erlang_functions ~w(spawn spawn_link spawn_monitor send apply exit halt open_port ports port_command)a
+  @forbidden_erlang_functions ~w(spawn spawn_link spawn_monitor send apply exit halt open_port ports port_command get put process_flag list_to_atom system_info)a
 
   @doc """
   Validates `code_string` against the safety rules.

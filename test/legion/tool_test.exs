@@ -43,15 +43,16 @@ defmodule Legion.ToolTest do
       assert Legion.Tool.extract_module_source(code, MyApp.Nested) == code
     end
 
-    test "returns full code when module is not found" do
-      code =
-        String.trim_trailing("""
-        defmodule Other do
-          def x, do: 1
-        end
-        """)
+    test "raises when module is not found" do
+      code = """
+      defmodule Other do
+        def x, do: 1
+      end
+      """
 
-      assert Legion.Tool.extract_module_source(code, MyApp.Missing) == code
+      assert_raise RuntimeError, ~r/Could not find/, fn ->
+        Legion.Tool.extract_module_source(code, MyApp.Missing)
+      end
     end
 
     test "handles fn blocks inside the module" do
@@ -69,7 +70,7 @@ defmodule Legion.ToolTest do
       assert Legion.Tool.extract_module_source(code, MyApp.WithFn) == code
     end
 
-    test "falls back to full file for nested module with shorthand name" do
+    test "extracts outer module from nested module file" do
       code =
         String.trim_trailing("""
         defmodule MyApp.Outer do
@@ -82,8 +83,20 @@ defmodule Legion.ToolTest do
         """)
 
       assert Legion.Tool.extract_module_source(code, MyApp.Outer) == code
+    end
 
-      assert Legion.Tool.extract_module_source(code, MyApp.Outer.Inner) == code
+    test "raises for shorthand nested module name" do
+      code = """
+      defmodule MyApp.Outer do
+        defmodule Inner do
+          def inner_fn, do: :inner
+        end
+      end
+      """
+
+      assert_raise RuntimeError, ~r/Could not find/, fn ->
+        Legion.Tool.extract_module_source(code, MyApp.Outer.Inner)
+      end
     end
 
     test "ignores do/end inside strings and comments" do

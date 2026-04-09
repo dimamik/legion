@@ -2,7 +2,7 @@ defmodule Legion.AgentPromptTest do
   use ExUnit.Case
 
   alias Legion.AgentPrompt
-  alias Legion.Test.Support.{HackerNewsAgent, MathAgent}
+  alias Legion.Test.Support.{HackerNewsAgent, MathAgent, NoToolAgent}
 
   describe "system_prompt/1" do
     test "includes agent moduledoc" do
@@ -33,11 +33,6 @@ defmodule Legion.AgentPromptTest do
     end
 
     test "no tools section when agent has no tools" do
-      defmodule NoToolAgent do
-        use Legion.Agent
-        @moduledoc "An agent with no tools."
-      end
-
       prompt = AgentPrompt.system_prompt(NoToolAgent)
       refute prompt =~ "## Available Tools"
     end

@@ -69,9 +69,21 @@ defmodule Legion.Telemetry do
               [:legion, :agent, :message, :stop],
               [:legion, :agent, :message, :exception]
             ],
-            iteration: [[:legion, :iteration, :start], [:legion, :iteration, :stop]],
-            llm: [[:legion, :llm, :request, :start], [:legion, :llm, :request, :stop]],
-            sandbox: [[:legion, :sandbox, :eval, :start], [:legion, :sandbox, :eval, :stop]]
+            iteration: [
+              [:legion, :iteration, :start],
+              [:legion, :iteration, :stop],
+              [:legion, :iteration, :exception]
+            ],
+            llm: [
+              [:legion, :llm, :request, :start],
+              [:legion, :llm, :request, :stop],
+              [:legion, :llm, :request, :exception]
+            ],
+            sandbox: [
+              [:legion, :sandbox, :eval, :start],
+              [:legion, :sandbox, :eval, :stop],
+              [:legion, :sandbox, :eval, :exception]
+            ]
           ],
           filter == :all or category in filter,
           event <- event_names do
@@ -208,6 +220,17 @@ defmodule Legion.Telemetry do
     )
   end
 
+  def handle_event([:legion, :iteration, :exception], measurements, meta, opts) do
+    ms = div(measurements.duration, 1_000_000)
+
+    log(
+      opts,
+      meta,
+      "  iteration:exception #{short(meta.agent)} ##{meta.iteration} #{inspect(meta.reason)} #{ms}ms",
+      :error
+    )
+  end
+
   def handle_event([:legion, :llm, :request, :start], _measurements, meta, opts) do
     log(opts, meta, "    llm:start #{meta.model} messages=#{meta.message_count}")
   end
@@ -215,6 +238,11 @@ defmodule Legion.Telemetry do
   def handle_event([:legion, :llm, :request, :stop], measurements, meta, opts) do
     ms = div(measurements.duration, 1_000_000)
     log(opts, meta, "    llm:stop #{meta.model} #{ms}ms")
+  end
+
+  def handle_event([:legion, :llm, :request, :exception], measurements, meta, opts) do
+    ms = div(measurements.duration, 1_000_000)
+    log(opts, meta, "    llm:exception #{meta.model} #{inspect(meta.reason)} #{ms}ms", :error)
   end
 
   def handle_event([:legion, :sandbox, :eval, :start], _measurements, meta, opts) do
@@ -232,7 +260,10 @@ defmodule Legion.Telemetry do
     end
   end
 
-  def handle_event(_event, _measurements, _meta, _opts), do: :ok
+  def handle_event([:legion, :sandbox, :eval, :exception], measurements, meta, opts) do
+    ms = div(measurements.duration, 1_000_000)
+    log(opts, meta, "    eval:exception #{inspect(meta.reason)} #{ms}ms", :error)
+  end
 
   defp log(opts, meta, message, level \\ nil) do
     level = level || Keyword.fetch!(opts, :level)
