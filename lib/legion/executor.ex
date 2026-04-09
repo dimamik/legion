@@ -22,7 +22,8 @@ defmodule Legion.Executor do
   @action_descriptions %{
     "eval_and_continue" => "Execute code and continue. Use when you need the result to proceed.",
     "eval_and_complete" => "Execute code and return its result as the final answer.",
-    "return" => "Return a structured result without code execution.",
+    "return" =>
+      "Return a structured result without code execution. This finishes your turn, return this only when you're done with the task. If you're encountering code evaluation errors - adjust the code and re-run it.",
     "done" => "Task complete with no result to return."
   }
 
