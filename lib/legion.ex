@@ -66,6 +66,19 @@ defmodule Legion do
   end
 
   @doc """
+  Returns the conversation history from a running agent.
+
+  ## Examples
+
+      {:ok, pid} = Legion.start_link(AssistantAgent)
+      {:ok, _} = Legion.call(pid, "Hello")
+      messages = Legion.get_messages(pid)
+  """
+  def get_messages(pid) do
+    AgentServer.get_messages(pid)
+  end
+
+  @doc """
   Runs multiple agent tasks concurrently and collects results.
 
   Returns `{:ok, results}` if all succeed, or the first `{:cancel, reason}`.

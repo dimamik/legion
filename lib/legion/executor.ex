@@ -78,6 +78,7 @@ defmodule Legion.Executor do
   end
 
   defp iterate(agent_module, messages, config, iteration, retries, bindings) do
+    # credo:disable-for-next-line
     try do
       {action, messages} = call_llm(agent_module, messages, config, iteration)
 
@@ -101,7 +102,9 @@ defmodule Legion.Executor do
       {result, %{action: action["action"]}}
     rescue
       e ->
-        result = handle_execution_error(agent_module, messages, config, e, iteration, retries, bindings)
+        result =
+          handle_execution_error(agent_module, messages, config, e, iteration, retries, bindings)
+
         {result, %{action: nil}}
     end
   end

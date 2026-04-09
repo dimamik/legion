@@ -19,6 +19,25 @@ defmodule Legion.AgentServerTest do
      }}
   end
 
+  describe "get_messages/1" do
+    test "returns conversation history from a running agent" do
+      stub(ReqLLM, :generate_object, fn _model, _messages, _schema ->
+        llm_response("Paris")
+      end)
+
+      {:ok, pid} = Legion.start_link(MathAgent)
+      {:ok, _} = Legion.call(pid, "What is the capital of France?")
+
+      messages = Legion.get_messages(pid)
+
+      assert [
+               %{role: "system", content: _system},
+               %{role: "user", content: "What is the capital of France?"},
+               %{role: "assistant"} | _
+             ] = messages
+    end
+  end
+
   describe "image messages" do
     test "sends {:image, data, media_type} as a content parts list to the LLM" do
       test_pid = self()

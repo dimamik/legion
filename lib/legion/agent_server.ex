@@ -35,6 +35,10 @@ defmodule Legion.AgentServer do
     GenServer.cast(agent, {:message, message})
   end
 
+  def get_messages(agent) do
+    GenServer.call(agent, :get_messages)
+  end
+
   # Server callbacks
 
   @impl true
@@ -74,6 +78,11 @@ defmodule Legion.AgentServer do
       %{system_time: System.system_time()},
       %{agent: state.agent_module}
     )
+  end
+
+  @impl true
+  def handle_call(:get_messages, _from, state) do
+    {:reply, state.messages, state}
   end
 
   @impl true
