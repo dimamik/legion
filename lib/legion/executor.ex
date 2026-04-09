@@ -78,26 +78,32 @@ defmodule Legion.Executor do
   end
 
   defp iterate(agent_module, messages, config, iteration, retries, bindings) do
-    {action, messages} = call_llm(agent_module, messages, config, iteration)
+    try do
+      {action, messages} = call_llm(agent_module, messages, config, iteration)
 
-    result =
-      case validate_action_type(agent_module, action) do
-        :ok ->
-          handle_action(agent_module, messages, config, action, iteration, retries, bindings)
+      result =
+        case validate_action_type(agent_module, action) do
+          :ok ->
+            handle_action(agent_module, messages, config, action, iteration, retries, bindings)
 
-        {:error, reason} ->
-          handle_execution_error(
-            agent_module,
-            messages,
-            config,
-            reason,
-            iteration,
-            retries,
-            bindings
-          )
-      end
+          {:error, reason} ->
+            handle_execution_error(
+              agent_module,
+              messages,
+              config,
+              reason,
+              iteration,
+              retries,
+              bindings
+            )
+        end
 
-    {result, %{action: action["action"]}}
+      {result, %{action: action["action"]}}
+    rescue
+      e ->
+        result = handle_execution_error(agent_module, messages, config, e, iteration, retries, bindings)
+        {result, %{action: nil}}
+    end
   end
 
   defp call_llm(agent_module, messages, config, iteration) do
