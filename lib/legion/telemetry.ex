@@ -191,12 +191,12 @@ defmodule Legion.Telemetry do
   end
 
   def handle_event([:legion, :agent, :message, :stop], measurements, meta, opts) do
-    ms = div(measurements.duration, 1_000_000)
+    ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
     log(opts, meta, "message:stop #{short(meta.agent)} iterations=#{meta[:iterations]} #{ms}ms")
   end
 
   def handle_event([:legion, :agent, :message, :exception], measurements, meta, opts) do
-    ms = div(measurements.duration, 1_000_000)
+    ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
 
     log(
       opts,
@@ -211,7 +211,7 @@ defmodule Legion.Telemetry do
   end
 
   def handle_event([:legion, :iteration, :stop], measurements, meta, opts) do
-    ms = div(measurements.duration, 1_000_000)
+    ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
 
     log(
       opts,
@@ -221,7 +221,7 @@ defmodule Legion.Telemetry do
   end
 
   def handle_event([:legion, :iteration, :exception], measurements, meta, opts) do
-    ms = div(measurements.duration, 1_000_000)
+    ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
 
     log(
       opts,
@@ -236,12 +236,12 @@ defmodule Legion.Telemetry do
   end
 
   def handle_event([:legion, :llm, :request, :stop], measurements, meta, opts) do
-    ms = div(measurements.duration, 1_000_000)
+    ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
     log(opts, meta, "    llm:stop #{meta.model} #{ms}ms")
   end
 
   def handle_event([:legion, :llm, :request, :exception], measurements, meta, opts) do
-    ms = div(measurements.duration, 1_000_000)
+    ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
     log(opts, meta, "    llm:exception #{meta.model} #{inspect(meta.reason)} #{ms}ms", :error)
   end
 
@@ -250,7 +250,7 @@ defmodule Legion.Telemetry do
   end
 
   def handle_event([:legion, :sandbox, :eval, :stop], measurements, meta, opts) do
-    ms = div(measurements.duration, 1_000_000)
+    ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
 
     if meta.success do
       log(opts, meta, "    eval:stop ok #{ms}ms")
@@ -261,7 +261,7 @@ defmodule Legion.Telemetry do
   end
 
   def handle_event([:legion, :sandbox, :eval, :exception], measurements, meta, opts) do
-    ms = div(measurements.duration, 1_000_000)
+    ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
     log(opts, meta, "    eval:exception #{inspect(meta.reason)} #{ms}ms", :error)
   end
 

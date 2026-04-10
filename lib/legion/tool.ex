@@ -45,7 +45,6 @@ defmodule Legion.Tool do
     end
   end
 
-  # NOTE: returns the whole file for nested modules
   @doc false
   def extract_module_source(code, module) do
     module_header = "defmodule #{inspect(module)} do"
