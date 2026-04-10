@@ -139,6 +139,10 @@ defmodule Legion.Sandbox.ASTCheckerTest do
     assert msg =~ "alias"
   end
 
+  test "alias renaming forbidden module to allowed name is blocked" do
+    assert {:error, _} = ASTChecker.check("alias :os, as: SafeModule\nSafeModule.cmd(\"ls\")", [])
+  end
+
   test "aliasing allowed modules works via allowed_modules list" do
     alias Some.Namespace.MyTool
     assert :ok = ASTChecker.check("MyTool.run(1)", [MyTool])

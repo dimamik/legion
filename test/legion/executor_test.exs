@@ -11,6 +11,22 @@ defmodule Legion.ExecutorTest do
     def action_types, do: ~w(return done)
   end
 
+  defmodule StructuredOutputAgent do
+    @moduledoc "An agent with a custom output schema."
+    use Legion.Agent
+
+    def output_schema do
+      %{
+        "type" => "object",
+        "properties" => %{
+          "summary" => %{"type" => "string"},
+          "score" => %{"type" => "integer"}
+        },
+        "required" => ["summary", "score"]
+      }
+    end
+  end
+
   setup :set_mimic_global
 
   @moduletag capture_log: true
@@ -125,8 +141,15 @@ defmodule Legion.ExecutorTest do
         end
 
         case i do
-          0 -> response(%{"action" => "eval_and_continue", "code" => "posts = [1, 2]", "result" => ""})
-          1 -> response(%{"action" => "return", "code" => "", "result" => "done"})
+          0 ->
+            response(%{
+              "action" => "eval_and_continue",
+              "code" => "posts = [1, 2]",
+              "result" => ""
+            })
+
+          1 ->
+            response(%{"action" => "return", "code" => "", "result" => "done"})
         end
       end)
 
@@ -135,6 +158,55 @@ defmodule Legion.ExecutorTest do
       assert_received {:result_msg, msg}
       assert msg =~ "Available variables:"
       assert msg =~ "`posts`"
+    end
+  end
+
+  describe "custom output_schema" do
+    test "schema is passed to LLM with additionalProperties injected" do
+      test_pid = self()
+
+      stub(ReqLLM, :generate_object, fn _model, _messages, schema ->
+        send(test_pid, {:schema, schema})
+
+        response(%{
+          "action" => "return",
+          "code" => "",
+          "result" => %{"summary" => "hi", "score" => 1}
+        })
+      end)
+
+      Legion.execute(StructuredOutputAgent, "test")
+
+      assert_received {:schema, schema}
+      result_schema = schema["properties"]["result"]
+      assert result_schema["additionalProperties"] == false
+      assert result_schema["properties"] == StructuredOutputAgent.output_schema()["properties"]
+    end
+
+    test "return action passes structured result through" do
+      stub(ReqLLM, :generate_object, fn _model, _messages, _schema ->
+        response(%{
+          "action" => "return",
+          "code" => "",
+          "result" => %{"summary" => "all good", "score" => 95}
+        })
+      end)
+
+      assert {:ok, %{"summary" => "all good", "score" => 95}} =
+               Legion.execute(StructuredOutputAgent, "evaluate")
+    end
+
+    test "eval_and_complete returns code result, not the schema result field" do
+      stub(ReqLLM, :generate_object, fn _model, _messages, _schema ->
+        response(%{
+          "action" => "eval_and_complete",
+          "code" => "%{summary: \"computed\", score: 42}",
+          "result" => ""
+        })
+      end)
+
+      assert {:ok, %{summary: "computed", score: 42}} =
+               Legion.execute(StructuredOutputAgent, "compute")
     end
   end
 

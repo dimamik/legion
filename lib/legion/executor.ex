@@ -49,10 +49,26 @@ defmodule Legion.Executor do
           "description" =>
             "Elixir code to execute. Required for eval_* actions. Empty string otherwise."
         },
-        "result" => agent_module.output_schema()
+        "result" => enforce_no_additional_properties(agent_module.output_schema())
       }
     }
   end
+
+  # OpenAI strict mode requires `additionalProperties: false` on every object
+  # in the schema tree. Inject it recursively so users don't have to.
+  defp enforce_no_additional_properties(%{"type" => "object", "properties" => props} = schema) do
+    props = Map.new(props, fn {k, v} -> {k, enforce_no_additional_properties(v)} end)
+
+    schema
+    |> Map.put("properties", props)
+    |> Map.put("additionalProperties", false)
+  end
+
+  defp enforce_no_additional_properties(%{"type" => "array", "items" => items} = schema) do
+    Map.put(schema, "items", enforce_no_additional_properties(items))
+  end
+
+  defp enforce_no_additional_properties(schema), do: schema
 
   @doc """
   Runs the LLM loop against the given message history.
