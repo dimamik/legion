@@ -117,7 +117,7 @@ For multi-turn conversations or persistent agents:
 
 ```elixir
 # Start an agent that maintains context
-{:ok, pid} = Legion.start_link(MyApp.AssistantAgent, "Help me analyze this data")
+{:ok, pid} = Legion.start_link(MyApp.AssistantAgent)
 
 # Send follow-up messages
 {:ok, response} = Legion.call(pid, "Now filter for items over $100")
@@ -162,11 +162,11 @@ All callbacks are optional with sensible defaults:
 | Callback          | Default                 | Description                             |
 | ----------------- | ----------------------- | --------------------------------------- |
 | `tools/0`         | `[]`                    | Tool modules available to the agent     |
-| `description/0`   | `@moduledoc`            | Agent description for the system prompt |
 | `output_schema/0` | `%{"type" => "string"}` | JSON Schema for structured output       |
 | `tool_config/1`   | `[]`                    | Per-tool keyword config                 |
 | `system_prompt/0` | auto-generated          | Override the entire system prompt       |
 | `config/0`        | `%{}`                   | Model, timeouts, limits                 |
+| `action_types/0`  | all four actions        | Restrict which actions the LLM can use  |
 
 ```elixir
 defmodule MyApp.DataAgent do
@@ -174,12 +174,16 @@ defmodule MyApp.DataAgent do
 
   def tools, do: [MyApp.HTTPTool]
 
-  # Structured output schema
+  # Structured output schema (JSON Schema)
   def output_schema do
-    [
-      summary: [type: :string, required: true],
-      count: [type: :integer, required: true]
-    ]
+    %{
+      "type" => "object",
+      "properties" => %{
+        "summary" => %{"type" => "string"},
+        "count" => %{"type" => "integer"}
+      },
+      "required" => ["summary", "count"]
+    }
   end
 
   # Additional instructions for the LLM
@@ -198,7 +202,7 @@ To authorize tool calls for a specific user, put auth data into Vault before sta
 
 ```elixir
 # Before starting the agent
-Vault.init(:current_user, %{id: user.id})
+Vault.init(current_user: %{id: user.id})
 
 {:ok, result} = Legion.execute(MyApp.PostsAgent, "Find my posts from today and summarize them")
 ```
@@ -220,11 +224,31 @@ end
 Request human input during agent execution:
 
 ```elixir
-# Agent can use built-in HumanTool (if you allow it to)
-HumanTool.ask("Should I proceed with this operation?")
+defmodule MyApp.ChatHandler do
+  use GenServer
 
-# Your application responds
-Legion.call(agent_pid, {:respond, "Yes, proceed"})
+  def start_link(opts), do: GenServer.start_link(__MODULE__, :ok, opts)
+  def init(:ok), do: {:ok, %{}}
+
+  # Receive question from agent, reply with answer
+  def handle_info({:human_request, ref, from_pid, question, _meta}, state) do
+    answer = get_answer_from_user(question)
+    send(from_pid, {:human_response, ref, answer})
+    {:noreply, state}
+  end
+end
+```
+
+Configure your agent to use the HumanTool with your handler:
+
+```elixir
+defmodule MyApp.AssistantAgent do
+  @moduledoc "An assistant that can ask the user questions."
+  use Legion.Agent
+
+  def tools, do: [Legion.Tools.HumanTool]
+  def tool_config(Legion.Tools.HumanTool), do: [handler: MyApp.ChatHandler, timeout: 30_000]
+end
 ```
 
 ## Multi-Agent Systems
@@ -284,13 +308,10 @@ Legion.Telemetry.attach_default_logger()
 Legion emits telemetry events for observability:
 
 - `[:legion, :agent, :started | :stopped]` - agent lifecycle
-- `[:legion, :agent, :message, :start | :stop]` - per-message lifecycle
-- `[:legion, :iteration, :start | :stop]` - each execution step
-- `[:legion, :llm, :request, :start | :stop]` - LLM API calls
-- `[:legion, :sandbox, :eval, :start | :stop]` - code evaluation
-- `[:legion, :human, :input_required | :input_received]` - human-in-the-loop
-
-Plus, Legion emits `Req` telemetry events for HTTP requests.
+- `[:legion, :agent, :message, :start | :stop | :exception]` - per-message lifecycle
+- `[:legion, :iteration, :start | :stop | :exception]` - each execution step
+- `[:legion, :llm, :request, :start | :stop | :exception]` - LLM API calls
+- `[:legion, :sandbox, :eval, :start | :stop | :exception]` - code evaluation
 
 ## Limitations
 
