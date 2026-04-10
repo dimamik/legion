@@ -39,17 +39,12 @@ defmodule Legion.Tool do
     quote do
       @behaviour Legion.Tool
 
-      def name do
-        __MODULE__
-      end
-
       def description, do: unquote(source)
 
       defoverridable description: 0
     end
   end
 
-  # NOTE: returns the whole file for nested modules
   @doc false
   def extract_module_source(code, module) do
     module_header = "defmodule #{inspect(module)} do"
@@ -57,7 +52,7 @@ defmodule Legion.Tool do
 
     case Enum.find_index(lines, &String.contains?(&1, module_header)) do
       nil ->
-        code
+        raise "Could not find #{module_header} in source file"
 
       start_idx ->
         lines

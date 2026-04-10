@@ -69,8 +69,8 @@ defmodule Legion.Agent do
 
       def moduledoc do
         case @moduledoc do
-          false -> raise "#{inspect(__MODULE__)} must define a @moduledoc"
-          doc -> doc
+          doc when is_binary(doc) and doc != "" -> doc
+          _ -> raise "#{inspect(__MODULE__)} must define a @moduledoc"
         end
       end
 

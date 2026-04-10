@@ -186,6 +186,36 @@ defmodule Legion.Sandbox.ASTCheckerTest do
     assert msg =~ ":erlang.apply"
   end
 
+  test ":erlang.get is forbidden" do
+    assert {:error, msg} = ASTChecker.check(":erlang.get()", [])
+    assert msg =~ ":erlang.get"
+  end
+
+  test ":erlang.put is forbidden" do
+    assert {:error, msg} = ASTChecker.check(":erlang.put(:key, :value)", [])
+    assert msg =~ ":erlang.put"
+  end
+
+  test ":erlang.process_flag is forbidden" do
+    assert {:error, msg} = ASTChecker.check(":erlang.process_flag(:trap_exit, true)", [])
+    assert msg =~ ":erlang.process_flag"
+  end
+
+  test ":erlang.list_to_atom is forbidden" do
+    assert {:error, msg} = ASTChecker.check(":erlang.list_to_atom(~c\"boom\")", [])
+    assert msg =~ ":erlang.list_to_atom"
+  end
+
+  test ":erlang.system_info is forbidden" do
+    assert {:error, msg} = ASTChecker.check(":erlang.system_info(:process_count)", [])
+    assert msg =~ ":erlang.system_info"
+  end
+
+  test "__ENV__ is forbidden" do
+    assert {:error, msg} = ASTChecker.check("__ENV__", [])
+    assert msg =~ "__ENV__"
+  end
+
   # --- Edge cases ---
 
   test "syntax error returns parse error" do

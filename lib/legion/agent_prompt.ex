@@ -18,6 +18,7 @@ defmodule Legion.AgentPrompt do
       Code.eval_quoted(@template,
         description: description,
         tool_contents: tool_contents,
+        action_types: agent.action_types(),
         elixir_version: System.version()
       )
 

@@ -22,7 +22,8 @@ defmodule Legion.Executor do
   @action_descriptions %{
     "eval_and_continue" => "Execute code and continue. Use when you need the result to proceed.",
     "eval_and_complete" => "Execute code and return its result as the final answer.",
-    "return" => "Return a structured result without code execution.",
+    "return" =>
+      "Return a structured result without code execution. This finishes your turn, return this only when you're done with the task. If you're encountering code evaluation errors - adjust the code and re-run it.",
     "done" => "Task complete with no result to return."
   }
 
@@ -31,7 +32,7 @@ defmodule Legion.Executor do
 
     description =
       types
-      |> Enum.map_join("\n", fn t -> "- \"#{t}\": #{@action_descriptions[t]}" end)
+      |> Enum.map_join("\n", fn t -> "- \"#{t}\": #{Map.fetch!(@action_descriptions, t)}" end)
 
     %{
       "type" => "object",
@@ -48,10 +49,26 @@ defmodule Legion.Executor do
           "description" =>
             "Elixir code to execute. Required for eval_* actions. Empty string otherwise."
         },
-        "result" => agent_module.output_schema()
+        "result" => enforce_no_additional_properties(agent_module.output_schema())
       }
     }
   end
+
+  # OpenAI strict mode requires `additionalProperties: false` on every object
+  # in the schema tree. Inject it recursively so users don't have to.
+  defp enforce_no_additional_properties(%{"type" => "object", "properties" => props} = schema) do
+    props = Map.new(props, fn {k, v} -> {k, enforce_no_additional_properties(v)} end)
+
+    schema
+    |> Map.put("properties", props)
+    |> Map.put("additionalProperties", false)
+  end
+
+  defp enforce_no_additional_properties(%{"type" => "array", "items" => items} = schema) do
+    Map.put(schema, "items", enforce_no_additional_properties(items))
+  end
+
+  defp enforce_no_additional_properties(schema), do: schema
 
   @doc """
   Runs the LLM loop against the given message history.
@@ -80,14 +97,15 @@ defmodule Legion.Executor do
   defp iterate(agent_module, messages, config, iteration, retries, bindings) do
     # credo:disable-for-next-line
     try do
-      {action, messages} = call_llm(agent_module, messages, config, iteration)
+      with {:ok, action, messages} <- call_llm(agent_module, messages, config, iteration),
+           :ok <- validate_action_type(agent_module, action) do
+        result =
+          handle_action(agent_module, messages, config, action, iteration, retries, bindings)
 
-      result =
-        case validate_action_type(agent_module, action) do
-          :ok ->
-            handle_action(agent_module, messages, config, action, iteration, retries, bindings)
-
-          {:error, reason} ->
+        {result, %{action: action["action"]}}
+      else
+        {:error, reason} ->
+          result =
             handle_execution_error(
               agent_module,
               messages,
@@ -97,9 +115,9 @@ defmodule Legion.Executor do
               retries,
               bindings
             )
-        end
 
-      {result, %{action: action["action"]}}
+          {result, %{action: nil}}
+      end
     rescue
       e ->
         result =
@@ -123,10 +141,10 @@ defmodule Legion.Executor do
           {:ok, response} ->
             action = extract_object(response)
             msgs = messages ++ [%{role: "assistant", content: Jason.encode!(action)}]
-            {{action, msgs}, %{object: action}}
+            {{:ok, action, msgs}, %{object: action}}
 
           {:error, reason} ->
-            raise "LLM request failed: #{inspect(reason)}"
+            {{:error, "LLM request failed: #{inspect(reason)}"}, %{error: reason}}
         end
       end
     )
@@ -225,6 +243,10 @@ defmodule Legion.Executor do
        "Action #{inspect(action_type)} is not allowed for #{inspect(agent_module)}. " <>
          "Allowed: #{inspect(allowed)}"}
     end
+  end
+
+  defp validate_action_type(_agent_module, action) do
+    {:error, "Response missing required 'action' field, got: #{inspect(action)}"}
   end
 
   defp extract_object(%{object: object}) when is_map(object), do: object

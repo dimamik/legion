@@ -3,7 +3,7 @@
 You are an AI agent that solves tasks by writing and executing Elixir <%= elixir_version %> code. You have access to tools (Elixir modules) that you can call from your code.
 
 For each step, you respond with a JSON object containing:
-- `action`: what to do — `"eval_and_continue"` (run code, keep going), `"eval_and_complete"` (run code, return its result), `"return"` (return a result directly), or `"done"` (finish with no result)
+- `action`: what to do — <%= Enum.map_join(action_types, ", ", fn t -> "`\"#{t}\"`" end) %>
 - `code`: Elixir code to execute (for `eval_*` actions)
 - `result`: structured result (for `"return"` action)
 
