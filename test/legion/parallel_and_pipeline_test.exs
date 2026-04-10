@@ -142,6 +142,12 @@ defmodule Legion.ParallelAndPipelineTest do
 
       assert {:ok, "only step"} = Legion.pipeline([{MathAgent, "single step"}])
     end
+
+    test "raises ArgumentError on invalid step format" do
+      assert_raise ArgumentError, ~r/expected task to be a binary or a function\/1/, fn ->
+        Legion.pipeline([{MathAgent, 42}])
+      end
+    end
   end
 
   describe "then/3" do

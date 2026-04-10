@@ -138,6 +138,10 @@ defmodule Legion do
 
       {agent, fun}, {:ok, prev} when is_function(fun, 1) ->
         continue_or_halt(execute(agent, fun.(prev)))
+
+      {_agent, task}, _acc ->
+        raise ArgumentError,
+              "expected task to be a binary or a function/1, got: #{inspect(task)}"
     end)
   end
 

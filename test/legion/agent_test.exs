@@ -27,6 +27,56 @@ defmodule Legion.AgentTest do
     end
   end
 
+  describe "compile-time @moduledoc validation" do
+    test "raises at compile time when @moduledoc is missing" do
+      assert_raise CompileError, ~r/must define a @moduledoc/, fn ->
+        Code.compile_string("""
+        defmodule NoDocAgent do
+          use Legion.Agent
+        end
+        """)
+      end
+    end
+
+    test "raises at compile time when @moduledoc is false" do
+      assert_raise CompileError, ~r/must define a @moduledoc/, fn ->
+        Code.compile_string("""
+        defmodule FalseDocAgent do
+          @moduledoc false
+          use Legion.Agent
+        end
+        """)
+      end
+    end
+
+    test "raises at compile time when @moduledoc is empty" do
+      assert_raise CompileError, ~r/must define a @moduledoc/, fn ->
+        Code.compile_string("""
+        defmodule EmptyDocAgent do
+          @moduledoc ""
+          use Legion.Agent
+        end
+        """)
+      end
+    end
+  end
+
+  describe "child_spec/1" do
+    test "returns valid child spec with transient restart" do
+      spec = MinimalAgent.child_spec([])
+      assert spec.id == MinimalAgent
+      assert spec.start == {Legion, :start_link, [MinimalAgent, []]}
+      assert spec.restart == :transient
+    end
+
+    test "passes opts through to start args" do
+      spec = MinimalAgent.child_spec(name: :my_agent, model: "openai:gpt-4o")
+
+      assert spec.start ==
+               {Legion, :start_link, [MinimalAgent, [name: :my_agent, model: "openai:gpt-4o"]]}
+    end
+  end
+
   describe "defaults" do
     test "moduledoc returns @moduledoc" do
       assert MinimalAgent.moduledoc() == "A minimal agent with no overrides."

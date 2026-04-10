@@ -18,4 +18,12 @@ defmodule Legion.SandboxTest do
     {:ok, {_, b2}} = Legion.Sandbox.execute("y = 20", 15_000, [], b1)
     assert {:ok, {30, _}} = Legion.Sandbox.execute("x + y", 15_000, [], b2)
   end
+
+  test "throw returns an error tuple instead of crashing" do
+    assert {:error, {:throw, :foo}} = Legion.Sandbox.execute("throw(:foo)", 15_000)
+  end
+
+  test "exit returns an error tuple instead of crashing" do
+    assert {:error, {:exit, :boom}} = Legion.Sandbox.execute("exit(:boom)", 15_000)
+  end
 end

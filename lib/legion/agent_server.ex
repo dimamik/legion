@@ -14,6 +14,8 @@ defmodule Legion.AgentServer do
 
   use GenServer
 
+  require Logger
+
   alias Legion.{Executor, Telemetry}
   alias ReqLLM.Message.ContentPart
 
@@ -132,11 +134,19 @@ defmodule Legion.AgentServer do
 
   defp stringify(msg), do: inspect(msg, pretty: true, limit: :infinity)
 
+  @known_config_keys ~w(model max_iterations max_retries sandbox_timeout share_bindings)a
+
   defp resolve_config(agent_module, opts) do
     app_config = Application.get_env(:legion, :config, %{})
-
     call_config = Map.new(opts)
+    merged = Map.merge(app_config, Map.merge(agent_module.config(), call_config))
 
-    Map.merge(app_config, Map.merge(agent_module.config(), call_config))
+    unknown = Map.keys(merged) -- @known_config_keys
+
+    if unknown != [] do
+      Logger.warning("Unknown Legion config keys: #{inspect(unknown)}")
+    end
+
+    merged
   end
 end

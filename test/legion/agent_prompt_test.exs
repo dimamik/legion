@@ -4,6 +4,13 @@ defmodule Legion.AgentPromptTest do
   alias Legion.AgentPrompt
   alias Legion.Test.Support.{HackerNewsAgent, MathAgent, NoToolAgent}
 
+  defmodule JasonAgent do
+    @moduledoc "Agent that uses Jason as a 3rd party tool."
+    use Legion.Agent
+
+    def tools, do: [Jason]
+  end
+
   describe "system_prompt/1" do
     test "includes agent moduledoc" do
       prompt = AgentPrompt.system_prompt(MathAgent)
@@ -40,6 +47,12 @@ defmodule Legion.AgentPromptTest do
     test "result is trimmed" do
       prompt = AgentPrompt.system_prompt(MathAgent)
       assert prompt == String.trim(prompt)
+    end
+
+    test "includes 3rd party library source when listed in tools" do
+      prompt = AgentPrompt.system_prompt(JasonAgent)
+      assert prompt =~ "## Available Tools"
+      assert prompt =~ "defmodule Jason"
     end
   end
 end
