@@ -41,7 +41,7 @@ defmodule Legion.Agent do
       - `max_retries` — max consecutive failures before giving up (default: `3`)
       - `sandbox_timeout` — timeout in ms for code execution (default: `60_000`)
       - `share_bindings` — when `true`, variable bindings persist across turns
-        in a long-lived agent (default: `false`)
+        in a long-lived agent (default: `true`)
 
     - `action_types/0` — list of action strings the LLM is allowed to respond with.
       Defaults to all four: `~w(eval_and_continue eval_and_complete return done)`.

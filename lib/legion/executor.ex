@@ -16,7 +16,7 @@ defmodule Legion.Executor do
     max_iterations: 10,
     max_retries: 3,
     sandbox_timeout: 60_000,
-    share_bindings: false
+    share_bindings: true
   }
 
   @action_descriptions %{

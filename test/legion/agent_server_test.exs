@@ -7,11 +7,11 @@ defmodule Legion.AgentServerTest do
   alias Legion.Test.Support.MathAgent
   alias ReqLLM.Message.ContentPart
 
-  defmodule SharedBindingsAgent do
-    @moduledoc "Agent with shared bindings."
+  defmodule IsolatedBindingsAgent do
+    @moduledoc "Agent without shared bindings."
     use Legion.Agent
 
-    def config, do: %{share_bindings: true}
+    def config, do: %{share_bindings: false}
   end
 
   defmodule ConfiguredAgent do
@@ -234,7 +234,7 @@ defmodule Legion.AgentServerTest do
   end
 
   describe "share_bindings" do
-    test "bindings do not persist across turns by default" do
+    test "bindings persist across turns by default" do
       stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
         assistant_count = Enum.count(messages, &(&1[:role] == "assistant"))
 
@@ -247,13 +247,10 @@ defmodule Legion.AgentServerTest do
 
       {:ok, pid} = Legion.start_link(MathAgent)
       {:ok, 42} = Legion.call(pid, "set x")
-
-      ExUnit.CaptureIO.capture_io(:stderr, fn ->
-        assert {:cancel, :reached_max_retries} = Legion.call(pid, "use x")
-      end)
+      assert {:ok, 43} = Legion.call(pid, "use x")
     end
 
-    test "bindings persist across turns when share_bindings is true" do
+    test "bindings do not persist across turns when share_bindings is false" do
       stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
         assistant_count = Enum.count(messages, &(&1[:role] == "assistant"))
 
@@ -264,9 +261,12 @@ defmodule Legion.AgentServerTest do
         end
       end)
 
-      {:ok, pid} = Legion.start_link(SharedBindingsAgent)
+      {:ok, pid} = Legion.start_link(IsolatedBindingsAgent)
       {:ok, 42} = Legion.call(pid, "set x")
-      assert {:ok, 43} = Legion.call(pid, "use x")
+
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert {:cancel, :reached_max_retries} = Legion.call(pid, "use x")
+      end)
     end
   end
 end

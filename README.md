@@ -61,7 +61,7 @@ end
 - **Sandboxed Execution** - Generated code runs in a restricted environment with controlled access to tools. You have full control over which tools are exposed to which agents, and you can monitor agent behavior using the [`legion_web`](https://github.com/dimamik/legion_web) dashboard.
 - **Simple Tool Definition** - Expose any Elixir module as a tool with `use Legion.Tool`. This allows you to reuse your existing app's logic. If you want to expose a third-party module as a set of tools, you can do that too.
 - **Authorization baked in** - The safest way to authorize tool calls via the [`Vault`](https://github.com/dimamik/vault) library. Put all data needed to authorize an LLM call before starting the agent, and validate it inside the tool call. Everything will be available due to `Vault`'s nature.
-- **Long-lived Agents** - Treat your agents as [GenServers](https://hexdocs.pm/elixir/GenServer.html), context is preserved naturally. Start your agent with `Legion.start_link/2`, just as you'd start a [GenServer](https://hexdocs.pm/elixir/GenServer.html). Agents can reference variables across turns (tasks) — just use the `share_bindings: true` option.
+- **Long-lived Agents** - Treat your agents as [GenServers](https://hexdocs.pm/elixir/GenServer.html), context is preserved naturally. Start your agent with `Legion.start_link/2`, just as you'd start a [GenServer](https://hexdocs.pm/elixir/GenServer.html). Agents reference variables across turns (tasks) by default - disable `share_bindings` if you need each turn to start fresh.
 - **Multi-Agent Systems** - Agents can orchestrate other agents, letting you create complex systems that manage themselves. Agents spawn other agents as linked processes — when a parent dies, all children are stopped too. Your agent is just another BEAM process.
 - **Human in the Loop** - Human-in-the-loop is just a built-in tool called `HumanTool`. You could have written it yourself, but I wrote it for you. It just blocks the agent's execution until it receives a message from the user. Simple as that.
 - **Structured Output** - Define schemas to get typed, validated responses from agents, or omit types and operate on plain text. You have full control over prompts and schemas.
@@ -136,13 +136,13 @@ config :legion, :config, %{
   max_iterations: 10,
   max_retries: 3,
   sandbox_timeout: 60_000,
-  share_bindings: false
+  share_bindings: true
 }
 ```
 
 - **Iterations** are successful execution steps - the agent fetches data, processes it, calls another tool, etc. Each productive action counts as one iteration.
 - **Retries** are consecutive failures - when the LLM generates invalid code or a tool raises an error. The counter resets after each successful iteration.
-- **share_bindings** — when `true`, variable bindings from code execution carry over between turns in a long-lived agent. For example, if the LLM assigns `posts = ScraperTool.fetch_posts()` in one turn, the `posts` variable will be available in the next turn. Defaults to `false` (each turn starts with a clean slate).
+- **share_bindings** — when `true` (the default), variable bindings from code execution carry over between turns in a long-lived agent. For example, if the LLM assigns `posts = ScraperTool.fetch_posts()` in one turn, the `posts` variable will be available in the next turn. Set to `false` if each turn should start with a clean slate.
 
 Agents can override global settings:
 
