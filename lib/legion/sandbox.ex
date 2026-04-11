@@ -70,6 +70,9 @@ defmodule Legion.Sandbox do
             {:ok, {value, new_bindings}}
           rescue
             e -> {:error, e}
+          catch
+            :throw, value -> {:error, {:throw, value}}
+            :exit, reason -> {:error, {:exit, reason}}
           end
 
         send(parent, {:result, self(), result})

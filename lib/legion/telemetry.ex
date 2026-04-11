@@ -265,6 +265,10 @@ defmodule Legion.Telemetry do
     log(opts, meta, "    eval:exception #{inspect(meta.reason)} #{ms}ms", :error)
   end
 
+  def handle_event(event, _measurements, _meta, _opts) do
+    Logger.warning("Legion.Telemetry: unhandled event #{inspect(event)}")
+  end
+
   defp log(opts, meta, message, level \\ nil) do
     level = level || Keyword.fetch!(opts, :level)
     prefix = run_prefix(meta)

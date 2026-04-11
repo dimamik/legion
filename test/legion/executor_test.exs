@@ -27,6 +27,40 @@ defmodule Legion.ExecutorTest do
     end
   end
 
+  defmodule DeeplyNestedAgent do
+    @moduledoc "An agent with deeply nested output schema."
+    use Legion.Agent
+
+    def output_schema do
+      %{
+        "type" => "object",
+        "properties" => %{
+          "data" => %{
+            "type" => "object",
+            "properties" => %{
+              "name" => %{"type" => "string"}
+            }
+          },
+          "items" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "id" => %{"type" => "integer"},
+                "meta" => %{
+                  "type" => "object",
+                  "properties" => %{
+                    "tag" => %{"type" => "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    end
+  end
+
   setup :set_mimic_global
 
   @moduletag capture_log: true
@@ -234,6 +268,34 @@ defmodule Legion.ExecutorTest do
       end)
 
       assert {:ok, "answer"} = Legion.execute(ReturnOnlyAgent, "do something")
+    end
+  end
+
+  describe "enforce_no_additional_properties for nested schemas" do
+    test "recursively injects additionalProperties into nested objects and arrays" do
+      test_pid = self()
+
+      stub(ReqLLM, :generate_object, fn _model, _messages, schema ->
+        send(test_pid, {:schema, schema})
+
+        response(%{
+          "action" => "return",
+          "code" => "",
+          "result" => %{"data" => %{"name" => "x"}, "items" => []}
+        })
+      end)
+
+      Legion.execute(DeeplyNestedAgent, "test")
+
+      assert_received {:schema, schema}
+      result = schema["properties"]["result"]
+
+      assert result["additionalProperties"] == false
+      assert result["properties"]["data"]["additionalProperties"] == false
+
+      item_schema = result["properties"]["items"]["items"]
+      assert item_schema["additionalProperties"] == false
+      assert item_schema["properties"]["meta"]["additionalProperties"] == false
     end
   end
 end

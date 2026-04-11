@@ -83,7 +83,8 @@ defmodule Legion.Agent do
       def child_spec(opts) do
         %{
           id: __MODULE__,
-          start: {Legion, :start_link, [__MODULE__, opts]}
+          start: {Legion, :start_link, [__MODULE__, opts]},
+          restart: :transient
         }
       end
 
@@ -95,7 +96,22 @@ defmodule Legion.Agent do
     end
   end
 
-  defmacro __before_compile__(_env) do
+  defmacro __before_compile__(env) do
+    moduledoc = Module.get_attribute(env.module, :moduledoc)
+
+    doc =
+      case moduledoc do
+        {_line, doc} when is_binary(doc) and doc != "" -> doc
+        _ -> nil
+      end
+
+    unless doc do
+      raise CompileError,
+        description: "#{inspect(env.module)} must define a @moduledoc",
+        file: env.file,
+        line: 0
+    end
+
     quote do
       def tool_config(_tool), do: []
     end

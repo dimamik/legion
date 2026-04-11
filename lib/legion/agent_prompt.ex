@@ -8,10 +8,7 @@ defmodule Legion.AgentPrompt do
   @template EEx.compile_file(@template_path)
 
   def system_prompt(agent) do
-    tools = agent.tools()
-
-    tool_contents = Enum.map(tools, & &1.description())
-
+    tool_contents = Enum.map(agent.tools(), &tool_description/1)
     description = agent.moduledoc()
 
     {result, _} =
@@ -23,5 +20,15 @@ defmodule Legion.AgentPrompt do
       )
 
     String.trim(result)
+  end
+
+  defp tool_description(module) do
+    Code.ensure_loaded!(module)
+
+    if function_exported?(module, :description, 0) do
+      module.description()
+    else
+      Legion.SourceRegistry.source!(module)
+    end
   end
 end
