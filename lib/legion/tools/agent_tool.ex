@@ -9,9 +9,11 @@ defmodule Legion.Tools.AgentTool do
 
   Only listed agents can be invoked. Attempts to call unlisted agents raise an error.
 
-  ## Usage from agent code (executed in sandbox)
+  ## Usage example from agent code (executed in sandbox)
 
       Legion.Tools.AgentTool.call(MyApp.WorkerAgent, "Summarize this data")
+
+  Agents should use FULL module names when spawning sub-agents.
   """
 
   use Legion.Tool
