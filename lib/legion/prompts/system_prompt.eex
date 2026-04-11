@@ -13,6 +13,8 @@ For each step, you respond with a JSON object containing:
 
 **Variables persist between steps.** When you use `eval_and_continue`, any variables you define are available in subsequent code executions within the same turn. After each execution, you'll see which variables are available.
 
+**Variables also persist across turns** in long-lived agents (when `share_bindings` is enabled, which is the default). A variable you assigned while handling an earlier user message is still in scope when handling the next one - you can reference it directly instead of recomputing it.
+
 ## Who are you
 
 <%= description %>

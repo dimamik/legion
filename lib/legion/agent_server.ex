@@ -107,7 +107,9 @@ defmodule Legion.AgentServer do
         fn ->
           messages = state.messages ++ [%{role: "user", content: stringify(msg)}]
           prev_count = Enum.count(messages, &(&1[:role] == "assistant"))
-          initial_bindings = if state.config[:share_bindings], do: state.bindings, else: []
+
+          initial_bindings =
+            if Map.get(state.config, :share_bindings, true), do: state.bindings, else: []
 
           {status, value, msgs, bindings} =
             result = Executor.run(state.agent_module, messages, state.config, initial_bindings)
