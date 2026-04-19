@@ -1,16 +1,10 @@
 defmodule Legion.AgentServer do
-  @moduledoc """
-  GenServer that maintains conversation history for a long-lived agent.
+  @moduledoc false
 
-  Holds the message history across multiple turns. Each `call` or `cast`
-  appends the user message and runs `Executor` to completion (blocking).
-
-  ## Usage
-
-      {:ok, pid} = Legion.start_link(MyAgent)
-      {:ok, result} = Legion.call(pid, "Do something")
-      Legion.cast(pid, "Follow-up (fire and forget)")
-  """
+  # GenServer that maintains conversation history for a long-lived agent.
+  #
+  # Holds the message history across multiple turns. Each `call` or `cast`
+  # appends the user message and runs `Executor` to completion (blocking).
 
   use GenServer
 
@@ -26,7 +20,8 @@ defmodule Legion.AgentServer do
   def start_link(agent_module, opts \\ []) do
     {name, opts} = Keyword.pop(opts, :name)
     gen_opts = if name, do: [name: name], else: []
-    GenServer.start_link(__MODULE__, {agent_module, opts}, gen_opts)
+    config = resolve_config(agent_module, opts)
+    GenServer.start_link(__MODULE__, {agent_module, config}, gen_opts)
   end
 
   def call(agent, message, timeout \\ :infinity) do
@@ -44,7 +39,7 @@ defmodule Legion.AgentServer do
   # Server callbacks
 
   @impl true
-  def init({agent_module, opts}) do
+  def init({agent_module, config}) do
     parent_run_id = Vault.get(:run_id)
     run_id = make_ref()
 
@@ -56,7 +51,6 @@ defmodule Legion.AgentServer do
     end
 
     system_prompt = agent_module.system_prompt()
-    config = resolve_config(agent_module, opts)
 
     Telemetry.emit(
       [:legion, :agent, :started],
@@ -88,31 +82,53 @@ defmodule Legion.AgentServer do
   end
 
   @impl true
-  def handle_call({:message, msg}, _from, state) do
-    {reply, state} = handle_message(msg, state)
+  def handle_call({:message, message}, _from, state) do
+    {reply, state} = handle_message(message, state)
     {:reply, reply, state}
   end
 
   @impl true
-  def handle_cast({:message, msg}, state) do
-    {_reply, state} = handle_message(msg, state)
+  def handle_cast({:message, message}, state) do
+    {_reply, state} = handle_message(message, state)
     {:noreply, state}
   end
 
-  defp handle_message(msg, state) do
+  @doc """
+  Normalizes `message`, appends it to the conversation, and runs the executor
+  to completion. Returns `{{status, value}, new_state}`.
+
+  Accepted `message` shapes:
+    - `binary` - passed verbatim as the user message
+    - `{:image, data, media_type}` - single inline image from binary data
+    - `{:image_url, url}` - single image from a URL
+    - `{:multipart, [ContentPart.t()]}` - mixed text/image/file content; build
+      parts with `ReqLLM.Message.ContentPart.text/1`, `image/2`, `image_url/1`,
+      `file/3`
+    - `struct` - `__struct__` and `__meta__` are dropped, then JSON-encoded
+    - `map | list` - JSON-encoded
+    - anything else - `inspect/2` fallback (lossy; prefer the shapes above)
+  """
+  def handle_message(message, state) do
+    content =
+      message |> stringify() |> Executor.truncate_content(state.config[:max_message_length])
+
     {status, value, final_messages, final_bindings} =
       Telemetry.span(
         [:legion, :agent, :message],
-        %{agent: state.agent_module, message: msg},
+        %{agent: state.agent_module, message: content},
         fn ->
-          messages = state.messages ++ [%{role: "user", content: stringify(msg)}]
+          messages = state.messages ++ [%{role: "user", content: content}]
           prev_count = Enum.count(messages, &(&1[:role] == "assistant"))
-          initial_bindings = if state.config[:share_bindings], do: state.bindings, else: []
 
-          {status, value, msgs, bindings} =
+          initial_bindings =
+            if Map.get(state.config, :binding_scope, :turn) == :conversation,
+              do: state.bindings,
+              else: []
+
+          {status, value, messages, bindings} =
             result = Executor.run(state.agent_module, messages, state.config, initial_bindings)
 
-          iterations = Enum.count(msgs, &(&1[:role] == "assistant")) - prev_count
+          iterations = Enum.count(messages, &(&1[:role] == "assistant")) - prev_count
           {result, %{iterations: iterations, status: status, result: value, bindings: bindings}}
         end
       )
@@ -120,7 +136,7 @@ defmodule Legion.AgentServer do
     {{status, value}, %{state | messages: final_messages, bindings: final_bindings}}
   end
 
-  defp stringify(msg) when is_binary(msg), do: msg
+  defp stringify(message) when is_binary(message), do: message
 
   defp stringify({:image, data, media_type}) when is_binary(data) and is_binary(media_type) do
     [ContentPart.image(data, media_type)]
@@ -132,9 +148,18 @@ defmodule Legion.AgentServer do
 
   defp stringify({:multipart, parts}) when is_list(parts), do: parts
 
-  defp stringify(msg), do: inspect(msg, pretty: true, limit: :infinity)
+  defp stringify(%_{} = message) do
+    message
+    |> Map.from_struct()
+    |> Map.drop([:__meta__])
+    |> Jason.encode!()
+  end
 
-  @known_config_keys ~w(model max_iterations max_retries sandbox_timeout share_bindings)a
+  defp stringify(message) when is_map(message) or is_list(message), do: Jason.encode!(message)
+
+  defp stringify(message), do: inspect(message, pretty: true, limit: :infinity)
+
+  @known_config_keys ~w(binding_scope max_iterations max_message_length max_retries model sandbox_timeout)a
 
   defp resolve_config(agent_module, opts) do
     app_config = Application.get_env(:legion, :config, %{})
@@ -147,6 +172,20 @@ defmodule Legion.AgentServer do
       Logger.warning("Unknown Legion config keys: #{inspect(unknown)}")
     end
 
+    validate_max_message_length(merged)
+
     merged
   end
+
+  defp validate_max_message_length(%{max_message_length: :infinity}), do: :ok
+
+  defp validate_max_message_length(%{max_message_length: n}) when is_integer(n) and n > 0,
+    do: :ok
+
+  defp validate_max_message_length(%{max_message_length: other}) do
+    raise ArgumentError,
+          "expected :max_message_length to be a positive integer or :infinity, got: #{inspect(other)}"
+  end
+
+  defp validate_max_message_length(_config), do: :ok
 end

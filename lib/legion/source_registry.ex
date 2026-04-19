@@ -10,9 +10,9 @@ defmodule Legion.SourceRegistry do
 
   @extra_modules Application.compile_env(:legion, :extra_source_modules, [])
 
-  @sources Map.new(@extra_modules, fn mod ->
-             path = mod.__info__(:compile)[:source] |> to_string()
-             {mod, File.read!(path)}
+  @sources Map.new(@extra_modules, fn module ->
+             path = module.__info__(:compile)[:source] |> to_string()
+             {module, File.read!(path)}
            end)
 
   def sources, do: @sources

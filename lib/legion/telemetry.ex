@@ -182,12 +182,12 @@ defmodule Legion.Telemetry do
   end
 
   def handle_event([:legion, :agent, :message, :start], _measurements, meta, opts) do
-    msg =
+    message =
       if is_binary(meta.message),
         do: String.slice(meta.message, 0, 80),
         else: inspect(meta.message, limit: 5)
 
-    log(opts, meta, "message:start #{short(meta.agent)} #{inspect(msg)}")
+    log(opts, meta, "message:start #{short(meta.agent)} #{inspect(message)}")
   end
 
   def handle_event([:legion, :agent, :message, :stop], measurements, meta, opts) do
@@ -312,7 +312,8 @@ defmodule Legion.Telemetry do
     |> Enum.map_join("\n", &("      " <> &1))
   end
 
-  defp format_eval_error(%{message: msg}) when is_binary(msg), do: msg
+  defp format_eval_error(message) when is_binary(message), do: message
+  defp format_eval_error(%{message: message}) when is_binary(message), do: message
   defp format_eval_error(error) when is_exception(error), do: Exception.message(error)
   defp format_eval_error(error), do: inspect(error, pretty: true, limit: 50)
 end

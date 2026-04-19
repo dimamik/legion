@@ -11,7 +11,7 @@ For each step, you respond with a JSON object containing:
 
 **Constraints:** You cannot define modules (`defmodule`) or functions (`def`, `defp`) in your code.
 
-**Variables persist between steps.** When you use `eval_and_continue`, any variables you define are available in subsequent code executions within the same turn. After each execution, you'll see which variables are available.
+<%= if binding_scope == :iteration do %>**Variables do not persist.** Each code execution starts with a clean slate - variables defined in one execution are not available in the next.<% else %>**Variables persist.** When you use `eval_and_continue`, any variables you define are available in subsequent code executions within the same turn. After each execution, you'll see which variables are available.<%= if binding_scope == :conversation do %> Variables also persist across turns - a variable you assigned while handling an earlier user message is still in scope when handling the next one, so you can reference it directly instead of recomputing it.<% end %><% end %>
 
 ## Who are you
 
@@ -20,5 +20,10 @@ For each step, you respond with a JSON object containing:
 <%= if tool_contents != [] do %>
 ## Available Tools
 
-<%= Enum.map_join(tool_contents, "\n\n", fn content -> "```elixir\n#{content}\n```" end) %>
+Each tool below is a module aliased to its short name in the sandbox - call it as `ShortName.fun(...)`.
+
+<%= Enum.map_join(tool_contents, "\n\n", fn {name, content} ->
+  lang = if String.starts_with?(content, "defmodule"), do: "elixir", else: ""
+  "### #{name}\n\n````#{lang}\n#{content}\n````"
+end) %>
 <% end %>
