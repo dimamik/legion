@@ -9,6 +9,10 @@ defmodule Legion.Tool do
 
     - `description/0` — override to return a hand-written summary **instead of**
       the source code. Defaults to the module's source code.
+    - `extra_allowed_modules/0` — override to return additional modules that the
+      sandbox should alias and permit when this tool is available. Defaults to `[]`.
+      Useful for tools like `Legion.Tools.AgentTool` that dispatch to other modules
+      the agent needs to reference by name.
 
   ## Example
 
@@ -32,6 +36,7 @@ defmodule Legion.Tool do
   """
 
   @callback description() :: String.t()
+  @callback extra_allowed_modules() :: [module()]
 
   defmacro __using__(_opts) do
     source = extract_module_source(File.read!(__CALLER__.file), __CALLER__.module)
@@ -40,8 +45,9 @@ defmodule Legion.Tool do
       @behaviour Legion.Tool
 
       def description, do: unquote(source)
+      def extra_allowed_modules, do: []
 
-      defoverridable description: 0
+      defoverridable description: 0, extra_allowed_modules: 0
     end
   end
 
@@ -54,9 +60,9 @@ defmodule Legion.Tool do
       nil ->
         raise "Could not find #{module_header} in source file"
 
-      start_idx ->
+      start_index ->
         lines
-        |> Enum.drop(start_idx)
+        |> Enum.drop(start_index)
         |> extract_do_end_block()
         |> Enum.join("\n")
     end

@@ -10,13 +10,15 @@ defmodule Legion.AgentPrompt do
   def system_prompt(agent) do
     tool_contents = Enum.map(agent.tools(), &tool_description/1)
     description = agent.moduledoc()
+    binding_scope = Map.get(agent.config(), :binding_scope, :turn)
 
     {result, _} =
       Code.eval_quoted(@template,
         description: description,
         tool_contents: tool_contents,
         action_types: agent.action_types(),
-        elixir_version: System.version()
+        elixir_version: System.version(),
+        binding_scope: binding_scope
       )
 
     String.trim(result)
@@ -25,10 +27,14 @@ defmodule Legion.AgentPrompt do
   defp tool_description(module) do
     Code.ensure_loaded!(module)
 
-    if function_exported?(module, :description, 0) do
-      module.description()
-    else
-      Legion.SourceRegistry.source!(module)
-    end
+    content =
+      if function_exported?(module, :description, 0) do
+        module.description()
+      else
+        Legion.SourceRegistry.source!(module)
+      end
+
+    short_name = module |> Module.split() |> List.last()
+    {short_name, String.trim(content)}
   end
 end

@@ -3,20 +3,28 @@ defmodule Legion.Sandbox.ASTChecker do
   Static safety check for sandboxed code.
 
   Parses a code string into an AST and walks every node with `Macro.prewalk/3`,
-  rejecting the first violation found. Two categories of violations are checked:
+  rejecting the first violation found. Three categories of violations are checked:
 
-  - **Forbidden forms** — language constructs that could escape the sandbox:
-    `alias`, `import`, `require`, `use`, `quote`/`unquote`, `defmodule`,
-    `defmacro`, `defprotocol`, `send`, `receive`, `spawn`, `spawn_link`,
-    `spawn_monitor`, `__ENV__`.
-  - **Disallowed module calls** — any `Module.function()` or `:erlang_mod.function()`
+  - **Forbidden forms** - language constructs that could escape the sandbox:
+    `alias`, `import`, `require`, `use`, `quote`/`unquote`, `def`, `defp`,
+    `defmodule`, `defmacro`, `defprotocol`, `send`, `receive`, `spawn`,
+    `spawn_link`, `spawn_monitor`, `apply`, `__ENV__`.
+  - **Forbidden `Kernel` functions** - even though `Kernel` is allowed as a
+    module, these specific functions are rejected: `spawn`, `spawn_link`,
+    `spawn_monitor`, `send`, `apply`, `exit`.
+  - **Forbidden `:erlang` functions** - `:erlang` is allowed as a module, but
+    these functions are rejected: `spawn`, `spawn_link`, `spawn_monitor`,
+    `send`, `apply`, `exit`, `halt`, `open_port`, `ports`, `port_command`,
+    `get`, `put`, `process_flag`, `list_to_atom`, `system_info`.
+  - **Disallowed module calls** - any `Module.function()` or `:erlang_mod.function()`
     call where the module is not in the built-in safe list or the caller-supplied
     allow-list.
 
-  Built-in safe modules: `Kernel`, `String`, `Enum`, `Map`, `MapSet`, `List`,
-  `Keyword`, `Tuple`, `Integer`, `Float`, `Atom`, `Regex`, `Range`, `Access`,
-  `Stream`, `Date`, `DateTime`, `NaiveDateTime`, `Time`, `:erlang` (with
-  dangerous functions blocked), `:math`, `:binary`, `:lists`, `:maps`, `:string`.
+  Built-in safe modules: `Kernel` (with forbidden functions above), `String`,
+  `Enum`, `Map`, `MapSet`, `List`, `Keyword`, `Tuple`, `Integer`, `Float`,
+  `Atom`, `Regex`, `Range`, `Access`, `Stream`, `Date`, `DateTime`,
+  `NaiveDateTime`, `Time`, `Calendar`, `:erlang` (with forbidden functions
+  above), `:math`, `:binary`, `:lists`, `:maps`, `:string`.
   """
 
   @builtin_allowed [
@@ -39,6 +47,7 @@ defmodule Legion.Sandbox.ASTChecker do
     DateTime,
     NaiveDateTime,
     Time,
+    Calendar,
     :erlang,
     :math,
     :binary,
@@ -47,7 +56,7 @@ defmodule Legion.Sandbox.ASTChecker do
     :string
   ]
 
-  @forbidden_forms ~w(alias quote unquote defmodule defmacro defprotocol import require use send receive spawn spawn_link spawn_monitor apply __ENV__)a
+  @forbidden_forms ~w(alias quote unquote def defp defmodule defmacro defprotocol import require use send receive spawn spawn_link spawn_monitor apply __ENV__)a
 
   @forbidden_kernel_functions ~w(spawn spawn_link spawn_monitor send apply exit)a
 
@@ -69,8 +78,8 @@ defmodule Legion.Sandbox.ASTChecker do
     case Code.string_to_quoted(code_string) do
       {:ok, ast} ->
         alias_tails =
-          Enum.map(allowed_modules, fn mod ->
-            mod |> Module.split() |> List.last() |> then(&Module.concat([&1]))
+          Enum.map(allowed_modules, fn module ->
+            module |> Module.split() |> List.last() |> then(&Module.concat([&1]))
           end)
 
         allowed = @builtin_allowed ++ allowed_modules ++ alias_tails
@@ -82,7 +91,7 @@ defmodule Legion.Sandbox.ASTChecker do
     end
   end
 
-  defp check_node(node, {:error, _} = err, _allowed), do: {node, err}
+  defp check_node(node, {:error, _} = error, _allowed), do: {node, error}
 
   # Elixir module calls: ModuleName.function(...)
   defp check_node({{:., _, [{:__aliases__, _, parts}, func]}, _, _} = node, :ok, allowed) do
@@ -101,12 +110,12 @@ defmodule Legion.Sandbox.ASTChecker do
   end
 
   # Erlang module calls: :atom.function(...)
-  defp check_node({{:., _, [mod, func]}, _, _} = node, :ok, allowed) when is_atom(mod) do
+  defp check_node({{:., _, [module, func]}, _, _} = node, :ok, allowed) when is_atom(module) do
     cond do
-      mod not in allowed ->
-        {node, {:error, "Module #{inspect(mod)} is not allowed"}}
+      module not in allowed ->
+        {node, {:error, "Module #{inspect(module)} is not allowed"}}
 
-      mod == :erlang and func in @forbidden_erlang_functions ->
+      module == :erlang and func in @forbidden_erlang_functions ->
         {node, {:error, ":erlang.#{func} is not allowed"}}
 
       true ->

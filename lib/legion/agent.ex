@@ -40,8 +40,15 @@ defmodule Legion.Agent do
       - `max_iterations` — max successful execution steps per turn (default: `10`)
       - `max_retries` — max consecutive failures before giving up (default: `3`)
       - `sandbox_timeout` — timeout in ms for code execution (default: `60_000`)
-      - `share_bindings` — when `true`, variable bindings persist across turns
-        in a long-lived agent (default: `true`)
+      - `binding_scope` — how long variable bindings from code execution live
+        (default: `:turn`):
+        - `:iteration` — bindings reset between every code execution
+        - `:turn` — bindings persist across iterations within one turn, reset between turns
+        - `:conversation` — bindings persist for the entire conversation (across turns)
+      - `max_message_length` — max byte size of a single message added to the
+        conversation (user input, code execution result, or error text). Longer
+        content is truncated with a `[... truncated N bytes ...]` marker.
+        Defaults to `20_000`. Set to `:infinity` to disable truncation.
 
     - `action_types/0` — list of action strings the LLM is allowed to respond with.
       Defaults to all four: `~w(eval_and_continue eval_and_complete return done)`.

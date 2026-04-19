@@ -195,6 +195,75 @@ defmodule Legion.ExecutorTest do
     end
   end
 
+  describe "max_message_length in result/error feedback" do
+    test "truncates large code execution results in the feedback message" do
+      test_pid = self()
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+      stub(ReqLLM, :generate_object, fn _m, messages, _s ->
+        i = Agent.get_and_update(counter, fn n -> {n, n + 1} end)
+
+        if i > 0 do
+          last_msg = messages |> List.last() |> Map.get(:content)
+          send(test_pid, {:result_msg, last_msg})
+        end
+
+        case i do
+          0 ->
+            response(%{
+              "action" => "eval_and_continue",
+              "code" => "String.duplicate(\"a\", 5000)",
+              "result" => ""
+            })
+
+          1 ->
+            response(%{"action" => "return", "code" => "", "result" => "done"})
+        end
+      end)
+
+      {:ok, pid} = Legion.start_link(MathAgent, max_message_length: 200)
+      assert {:ok, "done"} = Legion.call(pid, "generate a lot")
+
+      assert_received {:result_msg, msg}
+      assert msg =~ "[... truncated"
+      assert byte_size(msg) < 1_000
+    end
+
+    test "truncates long error text in the retry feedback message" do
+      test_pid = self()
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      long_message = String.duplicate("x", 5_000)
+
+      stub(ReqLLM, :generate_object, fn _m, messages, _s ->
+        i = Agent.get_and_update(counter, fn n -> {n, n + 1} end)
+
+        if i > 0 do
+          last_msg = messages |> List.last() |> Map.get(:content)
+          send(test_pid, {:error_msg, last_msg})
+        end
+
+        case i do
+          0 ->
+            response(%{
+              "action" => "eval_and_complete",
+              "code" => "raise \"#{long_message}\"",
+              "result" => ""
+            })
+
+          _ ->
+            response(%{"action" => "return", "code" => "", "result" => "recovered"})
+        end
+      end)
+
+      {:ok, pid} = Legion.start_link(MathAgent, max_message_length: 200)
+      assert {:ok, "recovered"} = Legion.call(pid, "fail loudly")
+
+      assert_received {:error_msg, msg}
+      assert msg =~ "[... truncated"
+      assert byte_size(msg) < 1_000
+    end
+  end
+
   describe "custom output_schema" do
     test "schema is passed to LLM with additionalProperties injected" do
       test_pid = self()
