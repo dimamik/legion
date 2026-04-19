@@ -6,7 +6,7 @@ defmodule Legion.Integration.ImageTest do
 
       mix test test/integration/image_test.exs --include integration
   """
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias ReqLLM.Message.ContentPart
 
@@ -25,21 +25,38 @@ defmodule Legion.Integration.ImageTest do
     :ok
   end
 
-  test "describes an image sent as binary data" do
-    # 1x1 red pixel PNG
-    red_pixel_png =
-      Base.decode64!(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
-      )
+  # 1x1 red pixel PNG
+  @red_pixel_base64 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 
-    msg =
+  test "describes an image sent as binary data" do
+    red_pixel_png = Base.decode64!(@red_pixel_base64)
+
+    message =
       {:multipart,
        [
          ContentPart.text("Describe what you see in this image in one sentence."),
          ContentPart.image(red_pixel_png, "image/png")
        ]}
 
-    {:ok, result} = Legion.execute(ImageAgent, msg)
+    {:ok, result} = Legion.execute(ImageAgent, message)
+
+    assert is_binary(result)
+    assert String.downcase(result) =~ "red"
+  end
+
+  test "describes an image sent via {:image, data, media_type} shorthand" do
+    red_pixel_png = Base.decode64!(@red_pixel_base64)
+
+    {:ok, result} = Legion.execute(ImageAgent, {:image, red_pixel_png, "image/png"})
+
+    assert is_binary(result)
+    assert String.downcase(result) =~ "red"
+  end
+
+  test "describes an image sent via {:image_url, url} shorthand" do
+    data_url = "data:image/png;base64,#{@red_pixel_base64}"
+
+    {:ok, result} = Legion.execute(ImageAgent, {:image_url, data_url})
 
     assert is_binary(result)
     assert String.downcase(result) =~ "red"

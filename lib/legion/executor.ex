@@ -16,14 +16,17 @@ defmodule Legion.Executor do
     max_iterations: 10,
     max_retries: 3,
     sandbox_timeout: 60_000,
-    share_bindings: true
+    binding_scope: :turn,
+    max_message_length: 20_000
   }
 
   @action_descriptions %{
-    "eval_and_continue" => "Execute code and continue. Use when you need the result to proceed.",
-    "eval_and_complete" => "Execute code and return its result as the final answer.",
+    "eval_and_continue" =>
+      "Execute code and continue the turn. Use when you need the result before deciding the next step.",
+    "eval_and_complete" =>
+      "Finish the turn with the code's result. Use when the final answer comes from executing code.",
     "return" =>
-      "Return a structured result without code execution. This finishes your turn, return this only when you're done with the task. If you're encountering code evaluation errors - adjust the code and re-run it.",
+      "Finish the turn with a structured result and no code execution. Only use when the task is fully done - not to report in-progress work or bail out of execution errors (fix the code and re-run instead).",
     "done" => "Task complete with no result to return."
   }
 
@@ -140,8 +143,8 @@ defmodule Legion.Executor do
         case ReqLLM.generate_object(config.model, messages, action_schema(agent_module)) do
           {:ok, response} ->
             action = extract_object(response)
-            msgs = messages ++ [%{role: "assistant", content: Jason.encode!(action)}]
-            {{:ok, action, msgs}, %{object: action}}
+            messages = messages ++ [%{role: "assistant", content: Jason.encode!(action)}]
+            {{:ok, action, messages}, %{object: action}}
 
           {:error, reason} ->
             {{:error, "LLM request failed: #{inspect(reason)}"}, %{error: reason}}
@@ -176,7 +179,10 @@ defmodule Legion.Executor do
        when eval in ["eval_and_continue", "eval_and_complete"] and code != "" do
     case eval_in_span(agent, code, config, bindings) do
       {:ok, {result, new_bindings}} ->
-        messages = messages ++ [%{role: "user", content: format_result(result, new_bindings)}]
+        new_bindings = if config.binding_scope == :iteration, do: [], else: new_bindings
+
+        messages =
+          messages ++ [%{role: "user", content: format_result(result, new_bindings, config)}]
 
         if eval == "eval_and_continue",
           do: loop(agent, messages, config, i + 1, 0, new_bindings),
@@ -201,7 +207,9 @@ defmodule Legion.Executor do
 
   defp eval_in_span(agent_module, code, config, bindings) do
     Telemetry.span([:legion, :sandbox, :eval], %{agent: agent_module, code: code}, fn ->
-      allowed = agent_module.tools()
+      tools = agent_module.tools()
+      extras = Enum.flat_map(tools, & &1.extra_allowed_modules())
+      allowed = tools ++ extras
 
       case Sandbox.execute(code, config.sandbox_timeout, allowed, bindings) do
         {:ok, {value, new_bindings}} ->
@@ -217,7 +225,7 @@ defmodule Legion.Executor do
     if retries >= config.max_retries do
       {:cancel, :reached_max_retries, messages, bindings}
     else
-      error_text = format_error(error)
+      error_text = error |> format_error() |> truncate_content(config[:max_message_length])
 
       messages =
         messages ++
@@ -258,24 +266,40 @@ defmodule Legion.Executor do
 
   defp extract_object(_response), do: raise("LLM response contained no structured object")
 
-  defp format_result(result, bindings) do
-    var_names = bindings |> Keyword.keys() |> Enum.map(&"`#{&1}`")
+  defp format_result(result, bindings, config) do
+    variable_names = bindings |> Keyword.keys() |> Enum.map(&"`#{&1}`")
+
+    inspected =
+      result
+      |> inspect(pretty: true, limit: 1000)
+      |> truncate_content(config[:max_message_length])
 
     base = """
     Code executed successfully. Result:
     ```
-    #{inspect(result, pretty: true, limit: 1000)}
+    #{inspected}
     ```
     """
 
-    if var_names == [] do
+    if variable_names == [] do
       base
     else
-      base <> "\nAvailable variables: #{Enum.join(var_names, ", ")}"
+      base <> "\nAvailable variables: #{Enum.join(variable_names, ", ")}"
     end
   end
 
-  defp format_error(%{message: msg}) when is_binary(msg), do: msg
+  defp format_error(message) when is_binary(message), do: message
+  defp format_error(%{message: message}) when is_binary(message), do: message
   defp format_error(error) when is_exception(error), do: Exception.message(error)
   defp format_error(error), do: inspect(error, pretty: true, limit: 50)
+
+  @doc false
+  def truncate_content(content, :infinity), do: content
+
+  def truncate_content(content, max)
+      when is_binary(content) and is_integer(max) and byte_size(content) > max do
+    binary_part(content, 0, max) <> "\n\n[... truncated #{byte_size(content) - max} bytes ...]"
+  end
+
+  def truncate_content(content, _max), do: content
 end

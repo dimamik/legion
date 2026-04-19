@@ -64,18 +64,20 @@ defmodule Legion.Sandbox do
 
     {pid, ref} =
       spawn_monitor(fn ->
-        result =
-          try do
-            {value, new_bindings} = Code.eval_string(code_string, bindings)
-            {:ok, {value, new_bindings}}
-          rescue
-            e -> {:error, e}
-          catch
-            :throw, value -> {:error, {:throw, value}}
-            :exit, reason -> {:error, {:exit, reason}}
-          end
+        {result, diagnostics} =
+          Code.with_diagnostics(fn ->
+            try do
+              {value, new_bindings} = Code.eval_string(code_string, bindings)
+              {:ok, {value, new_bindings}}
+            rescue
+              e -> {:error, e}
+            catch
+              :throw, value -> {:error, {:throw, value}}
+              :exit, reason -> {:error, {:exit, reason}}
+            end
+          end)
 
-        send(parent, {:result, self(), result})
+        send(parent, {:result, self(), attach_diagnostics(result, diagnostics)})
       end)
 
     receive do
@@ -92,4 +94,20 @@ defmodule Legion.Sandbox do
         {:error, :timeout}
     end
   end
+
+  defp attach_diagnostics({:error, %CompileError{}}, [_ | _] = diagnostics) do
+    {:error, format_diagnostics(diagnostics)}
+  end
+
+  defp attach_diagnostics(result, _diagnostics), do: result
+
+  defp format_diagnostics(diagnostics) do
+    Enum.map_join(diagnostics, "\n", fn diag ->
+      "#{format_position(diag.position)}: #{diag.message}"
+    end)
+  end
+
+  defp format_position({line, column}), do: "#{line}:#{column}"
+  defp format_position(line) when is_integer(line), do: "#{line}"
+  defp format_position(_), do: "?"
 end

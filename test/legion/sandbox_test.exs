@@ -26,4 +26,25 @@ defmodule Legion.SandboxTest do
   test "exit returns an error tuple instead of crashing" do
     assert {:error, {:exit, :boom}} = Legion.Sandbox.execute("exit(:boom)", 15_000)
   end
+
+  test "compile error surfaces diagnostics instead of the generic wrapper message" do
+    code = ~S|x = 1
+"track: #{t.track}"|
+
+    assert {:error, msg} = Legion.Sandbox.execute(code, 15_000)
+    assert is_binary(msg)
+    assert msg =~ "undefined variable"
+    assert msg =~ "\"t\""
+    refute msg =~ "cannot compile file"
+  end
+
+  test "runtime exception is returned as the original struct" do
+    assert {:error, %RuntimeError{message: "boom"}} =
+             Legion.Sandbox.execute(~S|raise "boom"|, 15_000)
+  end
+
+  test "Calendar module is callable from sandboxed code" do
+    code = ~S|Calendar.strftime(~D[2026-04-17], "%Y-%m-%d")|
+    assert {:ok, {"2026-04-17", _}} = Legion.Sandbox.execute(code, 15_000)
+  end
 end

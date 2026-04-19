@@ -61,7 +61,7 @@ end
 - **Sandboxed Execution** - Generated code runs in a restricted environment with controlled access to tools. You have full control over which tools are exposed to which agents, and you can monitor agent behavior using the [`legion_web`](https://github.com/dimamik/legion_web) dashboard.
 - **Simple Tool Definition** - Expose any Elixir module as a tool with `use Legion.Tool`. This allows you to reuse your existing app's logic. If you want to expose a third-party module as a set of tools, you can do that too.
 - **Authorization baked in** - The safest way to authorize tool calls via the [`Vault`](https://github.com/dimamik/vault) library. Put all data needed to authorize an LLM call before starting the agent, and validate it inside the tool call. Everything will be available due to `Vault`'s nature.
-- **Long-lived Agents** - Treat your agents as [GenServers](https://hexdocs.pm/elixir/GenServer.html), context is preserved naturally. Start your agent with `Legion.start_link/2`, just as you'd start a [GenServer](https://hexdocs.pm/elixir/GenServer.html). Agents reference variables across turns (tasks) by default - disable `share_bindings` if you need each turn to start fresh.
+- **Long-lived Agents** - Treat your agents as [GenServers](https://hexdocs.pm/elixir/GenServer.html), context is preserved naturally. Start your agent with `Legion.start_link/2`, just as you'd start a [GenServer](https://hexdocs.pm/elixir/GenServer.html). Each turn starts with a clean slate by default; set `binding_scope: :conversation` to reference variables from previous turns.
 - **Multi-Agent Systems** - Agents can orchestrate other agents, letting you create complex systems that manage themselves. Agents spawn other agents as linked processes — when a parent dies, all children are stopped too. Your agent is just another BEAM process.
 - **Human in the Loop** - Human-in-the-loop is just a built-in tool called `HumanTool`. You could have written it yourself, but I wrote it for you. It just blocks the agent's execution until it receives a message from the user. Simple as that.
 - **Structured Output** - Define schemas to get typed, validated responses from agents, or omit types and operate on plain text. You have full control over prompts and schemas.
@@ -136,18 +136,24 @@ config :legion, :config, %{
   max_iterations: 10,
   max_retries: 3,
   sandbox_timeout: 60_000,
-  share_bindings: true
+  binding_scope: :turn,
+  max_message_length: 20_000
 }
 ```
 
 - **Iterations** are successful execution steps - the agent fetches data, processes it, calls another tool, etc. Each productive action counts as one iteration.
 - **Retries** are consecutive failures - when the LLM generates invalid code or a tool raises an error. The counter resets after each successful iteration.
-- **share_bindings** — when `true` (the default), variable bindings from code execution carry over between turns in a long-lived agent. For example, if the LLM assigns `posts = ScraperTool.fetch_posts()` in one turn, the `posts` variable will be available in the next turn. Set to `false` if each turn should start with a clean slate.
+- **binding_scope** — how long variable bindings from code execution live. Three levels, nested from narrowest to widest:
+  - `:iteration` — every code execution starts fresh. A variable defined in one `eval_and_continue` step is *not* visible in the next step of the same turn.
+  - `:turn` (default) — variables persist across iterations within one turn but reset between turns.
+  - `:conversation` — variables persist for the entire conversation. If the LLM assigns `posts = ScraperTool.fetch_posts()` in one turn, `posts` is still available in later turns.
+- **max_message_length** — max byte size of any single message added to the conversation (user input, code execution results, and error text). Longer content is truncated with a `[... truncated N bytes ...]` marker so a stray large payload cannot blow up the context. Set to `:infinity` to disable.
 
 Agents can override global settings:
 
 ```elixir
 defmodule MyApp.DataAgent do
+  @moduledoc "Fetches and processes data from HTTP APIs."
   use Legion.Agent
 
   def tools, do: [MyApp.HTTPTool]
@@ -170,6 +176,7 @@ All callbacks are optional with sensible defaults:
 
 ```elixir
 defmodule MyApp.DataAgent do
+  @moduledoc "Fetches and processes data from HTTP APIs."
   use Legion.Agent
 
   def tools, do: [MyApp.HTTPTool]
@@ -186,13 +193,61 @@ defmodule MyApp.DataAgent do
     }
   end
 
-  # Additional instructions for the LLM
+  # Replaces the entire auto-generated system prompt. Only override when you
+  # want full control - otherwise rely on @moduledoc and tool descriptions.
   def system_prompt do
-    "Always validate URLs before fetching. Prefer JSON responses."
+    "You are a data fetcher. Always validate URLs before fetching. Prefer JSON responses."
   end
 
   # Pass options to specific tools (accessible via Vault)
   def tool_config(MyApp.HTTPTool), do: [timeout: 10_000]
+end
+```
+
+## Third-Party Modules as Tools
+
+You can expose third-party modules (e.g. `Req`, `Jason`) as tools directly, without wrapping them. Since the module's source lives outside your project, Legion needs to be told to read it at compile time. Register the modules in your config:
+
+```elixir
+# config/config.exs
+config :legion, extra_source_modules: [Req, Jason]
+```
+
+Then list the module in your agent's `tools/0` like any other tool:
+
+```elixir
+defmodule MyApp.APIAgent do
+  @moduledoc "Fetches data from JSON APIs and decodes responses."
+  use Legion.Agent
+
+  def tools, do: [Req, Jason]
+end
+```
+
+The LLM receives the module's full source as the tool description and can call any public function inside the sandbox.
+
+Prefer a thin facade module using `use Legion.Tool` with a hand-written `description/0` when:
+
+- You want to expose only a subset of the library's API.
+- The library is large and injecting its entire source into the prompt would be wasteful.
+- You want a curated, LLM-friendly description rather than raw source.
+
+```elixir
+defmodule MyApp.Tools.JSONTool do
+  use Legion.Tool
+
+  def description do
+    """
+    JSONTool - encode and decode JSON.
+
+    ## Functions
+    - `encode!(term)` - returns a JSON string, raises on invalid input.
+    - `decode!(binary)` - returns a decoded term, raises on invalid JSON.
+    """
+  end
+
+  defdelegate encode!(term), to: Jason
+  defdelegate decode!(binary), to: Jason
 end
 ```
 
@@ -257,6 +312,7 @@ Agents can spawn and communicate with other agents using the built-in `AgentTool
 
 ```elixir
 defmodule MyApp.OrchestratorAgent do
+  @moduledoc "Coordinates research and writing sub-agents to produce finished content."
   use Legion.Agent
 
   def tools, do: [Legion.Tools.AgentTool, MyApp.Tools.DatabaseTool]

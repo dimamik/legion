@@ -7,11 +7,11 @@ defmodule Legion.AgentServerTest do
   alias Legion.Test.Support.MathAgent
   alias ReqLLM.Message.ContentPart
 
-  defmodule IsolatedBindingsAgent do
-    @moduledoc "Agent without shared bindings."
+  defmodule ConversationBindingsAgent do
+    @moduledoc "Agent with bindings persisted across the whole conversation."
     use Legion.Agent
 
-    def config, do: %{share_bindings: false}
+    def config, do: %{binding_scope: :conversation}
   end
 
   defmodule ConfiguredAgent do
@@ -139,31 +139,88 @@ defmodule Legion.AgentServerTest do
     end
   end
 
-  describe "image messages" do
-    test "sends {:image, data, media_type} as a content parts list to the LLM" do
-      test_pid = self()
-      image_data = <<0xFF, 0xD8, 0xFF, 0xE0>>
+  defp capture_user_content(test_pid) do
+    stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
+      user_msg = Enum.find(messages, &(&1[:role] == "user"))
+      send(test_pid, {:user_content, user_msg[:content]})
+      llm_response("ok")
+    end)
+  end
 
-      stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
-        user_msg = Enum.find(messages, &(&1[:role] == "user"))
-        send(test_pid, {:user_content, user_msg[:content]})
-        llm_response("ok")
-      end)
+  describe "multipart messages" do
+    test "passes a text + image part list through to the LLM unchanged" do
+      capture_user_content(self())
 
-      assert {:ok, "ok"} = Legion.execute(MathAgent, {:image, image_data, "image/jpeg"})
+      parts = [
+        ContentPart.text("Describe this image."),
+        ContentPart.image(<<1, 2, 3>>, "image/png")
+      ]
 
-      assert_received {:user_content, content}
-
-      assert [
-               %ContentPart{
-                 type: :image,
-                 media_type: "image/jpeg",
-                 data: ^image_data
-               }
-             ] = content
+      assert {:ok, "ok"} = Legion.execute(MathAgent, {:multipart, parts})
+      assert_received {:user_content, ^parts}
     end
 
-    test "sends {:image_url, url} as a content parts list to the LLM" do
+    test "supports text + image_url parts" do
+      capture_user_content(self())
+
+      parts = [
+        ContentPart.text("What is in this picture?"),
+        ContentPart.image_url("https://example.com/photo.png")
+      ]
+
+      assert {:ok, "ok"} = Legion.execute(MathAgent, {:multipart, parts})
+      assert_received {:user_content, ^parts}
+    end
+
+    test "supports a text-only part list" do
+      capture_user_content(self())
+
+      parts = [ContentPart.text("hello")]
+
+      assert {:ok, "ok"} = Legion.execute(MathAgent, {:multipart, parts})
+      assert_received {:user_content, ^parts}
+    end
+
+    test "supports an empty parts list" do
+      capture_user_content(self())
+
+      assert {:ok, "ok"} = Legion.execute(MathAgent, {:multipart, []})
+      assert_received {:user_content, []}
+    end
+  end
+
+  describe "image shorthand messages" do
+    test "wraps {:image, data, media_type} into a single image ContentPart" do
+      capture_user_content(self())
+
+      data = <<1, 2, 3>>
+      expected = [ContentPart.image(data, "image/png")]
+
+      assert {:ok, "ok"} = Legion.execute(MathAgent, {:image, data, "image/png"})
+      assert_received {:user_content, ^expected}
+    end
+
+    test "wraps {:image_url, url} into a single image_url ContentPart" do
+      capture_user_content(self())
+
+      url = "https://example.com/photo.png"
+      expected = [ContentPart.image_url(url)]
+
+      assert {:ok, "ok"} = Legion.execute(MathAgent, {:image_url, url})
+      assert_received {:user_content, ^expected}
+    end
+  end
+
+  describe "struct messages" do
+    defmodule SampleStruct do
+      defstruct [:id, :name]
+    end
+
+    defmodule EctoLikeStruct do
+      defstruct [:id, :name, :__meta__]
+    end
+
+    test "drops __struct__ and JSON-encodes the remaining fields" do
       test_pid = self()
 
       stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
@@ -173,21 +230,14 @@ defmodule Legion.AgentServerTest do
       end)
 
       assert {:ok, "ok"} =
-               Legion.execute(MathAgent, {:image_url, "https://example.com/photo.png"})
+               Legion.execute(MathAgent, %SampleStruct{id: 7, name: "ada"})
 
-      assert_received {:user_content, content}
-
-      assert [%ContentPart{type: :image_url, url: "https://example.com/photo.png"}] =
-               content
+      assert_received {:user_content, json}
+      assert Jason.decode!(json) == %{"id" => 7, "name" => "ada"}
     end
 
-    test "sends {:multipart, parts} as-is to the LLM" do
+    test "drops __meta__ before encoding (Ecto-style structs)" do
       test_pid = self()
-
-      parts = [
-        ContentPart.text("Describe this image."),
-        ContentPart.image(<<1, 2, 3>>, "image/png")
-      ]
 
       stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
         user_msg = Enum.find(messages, &(&1[:role] == "user"))
@@ -195,9 +245,99 @@ defmodule Legion.AgentServerTest do
         llm_response("ok")
       end)
 
-      assert {:ok, "ok"} = Legion.execute(MathAgent, {:multipart, parts})
+      msg = %EctoLikeStruct{id: 1, name: "x", __meta__: %{source: "users"}}
+
+      assert {:ok, "ok"} = Legion.execute(MathAgent, msg)
+
+      assert_received {:user_content, json}
+      assert Jason.decode!(json) == %{"id" => 1, "name" => "x"}
+    end
+  end
+
+  describe "max_message_length" do
+    test "truncates binary user input longer than the limit" do
+      capture_user_content(self())
+
+      {:ok, pid} = Legion.start_link(MathAgent, max_message_length: 100)
+      {:ok, _} = Legion.call(pid, String.duplicate("a", 5_000))
+
+      assert_received {:user_content, content}
+      assert String.starts_with?(content, String.duplicate("a", 100))
+      assert content =~ "[... truncated 4900 bytes ...]"
+    end
+
+    test "passes binary user input shorter than the limit through unchanged" do
+      capture_user_content(self())
+
+      {:ok, pid} = Legion.start_link(MathAgent, max_message_length: 100)
+      {:ok, _} = Legion.call(pid, "hello")
+
+      assert_received {:user_content, "hello"}
+    end
+
+    test "does not touch multipart content even when parts are large" do
+      capture_user_content(self())
+
+      parts = [ContentPart.text(String.duplicate("a", 5_000))]
+
+      {:ok, pid} = Legion.start_link(MathAgent, max_message_length: 100)
+      {:ok, _} = Legion.call(pid, {:multipart, parts})
 
       assert_received {:user_content, ^parts}
+    end
+
+    test ":infinity disables truncation" do
+      capture_user_content(self())
+
+      big = String.duplicate("a", 5_000)
+
+      {:ok, pid} = Legion.start_link(MathAgent, max_message_length: :infinity)
+      {:ok, _} = Legion.call(pid, big)
+
+      assert_received {:user_content, ^big}
+    end
+
+    test "nil raises ArgumentError" do
+      assert_raise ArgumentError,
+                   ~r/expected :max_message_length to be a positive integer or :infinity/,
+                   fn ->
+                     Legion.start_link(MathAgent, max_message_length: nil)
+                   end
+    end
+
+    test "zero raises ArgumentError" do
+      assert_raise ArgumentError,
+                   ~r/expected :max_message_length to be a positive integer or :infinity/,
+                   fn ->
+                     Legion.start_link(MathAgent, max_message_length: 0)
+                   end
+    end
+
+    test "per-agent config overrides application config" do
+      Application.put_env(:legion, :config, %{max_message_length: 10})
+      on_exit(fn -> Application.delete_env(:legion, :config) end)
+
+      capture_user_content(self())
+
+      {:ok, pid} = Legion.start_link(MathAgent, max_message_length: 1_000)
+      {:ok, _} = Legion.call(pid, String.duplicate("a", 50))
+
+      assert_received {:user_content, content}
+      assert byte_size(content) == 50
+    end
+
+    test "application config applies when no per-agent override is given" do
+      Application.put_env(:legion, :config, %{max_message_length: 10})
+      on_exit(fn -> Application.delete_env(:legion, :config) end)
+
+      capture_user_content(self())
+
+      {:ok, pid} = Legion.start_link(MathAgent)
+      {:ok, _} = Legion.call(pid, String.duplicate("a", 50))
+
+      assert_received {:user_content, content}
+      assert String.starts_with?(content, String.duplicate("a", 10))
+      assert content =~ "[... truncated 40 bytes ...]"
     end
   end
 
@@ -233,8 +373,8 @@ defmodule Legion.AgentServerTest do
     end
   end
 
-  describe "share_bindings" do
-    test "bindings persist across turns by default" do
+  describe "binding_scope" do
+    test "bindings do not persist across turns by default (:turn)" do
       stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
         assistant_count = Enum.count(messages, &(&1[:role] == "assistant"))
 
@@ -247,10 +387,13 @@ defmodule Legion.AgentServerTest do
 
       {:ok, pid} = Legion.start_link(MathAgent)
       {:ok, 42} = Legion.call(pid, "set x")
-      assert {:ok, 43} = Legion.call(pid, "use x")
+
+      ExUnit.CaptureIO.capture_io(:stderr, fn ->
+        assert {:cancel, :reached_max_retries} = Legion.call(pid, "use x")
+      end)
     end
 
-    test "bindings do not persist across turns when share_bindings is false" do
+    test "bindings persist across turns with :conversation" do
       stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
         assistant_count = Enum.count(messages, &(&1[:role] == "assistant"))
 
@@ -261,12 +404,9 @@ defmodule Legion.AgentServerTest do
         end
       end)
 
-      {:ok, pid} = Legion.start_link(IsolatedBindingsAgent)
+      {:ok, pid} = Legion.start_link(ConversationBindingsAgent)
       {:ok, 42} = Legion.call(pid, "set x")
-
-      ExUnit.CaptureIO.capture_io(:stderr, fn ->
-        assert {:cancel, :reached_max_retries} = Legion.call(pid, "use x")
-      end)
+      assert {:ok, 43} = Legion.call(pid, "use x")
     end
   end
 end

@@ -216,6 +216,16 @@ defmodule Legion.Sandbox.ASTCheckerTest do
     assert msg =~ "__ENV__"
   end
 
+  test "def is forbidden" do
+    assert {:error, msg} = ASTChecker.check("def foo(x), do: x + 1", [])
+    assert msg =~ "def"
+  end
+
+  test "defp is forbidden" do
+    assert {:error, msg} = ASTChecker.check("defp foo(x), do: x + 1", [])
+    assert msg =~ "defp"
+  end
+
   # --- Edge cases ---
 
   test "syntax error returns parse error" do
