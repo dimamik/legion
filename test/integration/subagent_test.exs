@@ -7,7 +7,7 @@ defmodule Legion.Integration.SubagentTest do
 
       mix test test/integration/subagent_test.exs --include integration
   """
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Legion.Test.Support.OrchestratorAgent
 

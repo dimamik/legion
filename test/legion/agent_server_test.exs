@@ -211,16 +211,12 @@ defmodule Legion.AgentServerTest do
     end
   end
 
-  describe "struct messages" do
+  describe "non-binary messages" do
     defmodule SampleStruct do
       defstruct [:id, :name]
     end
 
-    defmodule EctoLikeStruct do
-      defstruct [:id, :name, :__meta__]
-    end
-
-    test "drops __struct__ and JSON-encodes the remaining fields" do
+    test "structs are rendered via inspect" do
       test_pid = self()
 
       stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
@@ -229,14 +225,13 @@ defmodule Legion.AgentServerTest do
         llm_response("ok")
       end)
 
-      assert {:ok, "ok"} =
-               Legion.execute(MathAgent, %SampleStruct{id: 7, name: "ada"})
+      assert {:ok, "ok"} = Legion.execute(MathAgent, %SampleStruct{id: 7, name: "ada"})
 
-      assert_received {:user_content, json}
-      assert Jason.decode!(json) == %{"id" => 7, "name" => "ada"}
+      assert_received {:user_content, content}
+      assert content == inspect(%SampleStruct{id: 7, name: "ada"}, limit: :infinity)
     end
 
-    test "drops __meta__ before encoding (Ecto-style structs)" do
+    test "maps are rendered via inspect" do
       test_pid = self()
 
       stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
@@ -245,12 +240,27 @@ defmodule Legion.AgentServerTest do
         llm_response("ok")
       end)
 
-      msg = %EctoLikeStruct{id: 1, name: "x", __meta__: %{source: "users"}}
+      assert {:ok, "ok"} = Legion.execute(MathAgent, %{id: 1, name: "x"})
 
-      assert {:ok, "ok"} = Legion.execute(MathAgent, msg)
+      assert_received {:user_content, content}
+      assert content == inspect(%{id: 1, name: "x"}, limit: :infinity)
+    end
 
-      assert_received {:user_content, json}
-      assert Jason.decode!(json) == %{"id" => 1, "name" => "x"}
+    test "terms containing PIDs do not crash the GenServer" do
+      test_pid = self()
+
+      stub(ReqLLM, :generate_object, fn _model, messages, _schema ->
+        user_msg = Enum.find(messages, &(&1[:role] == "user"))
+        send(test_pid, {:user_content, user_msg[:content]})
+        llm_response("ok")
+      end)
+
+      {:ok, pid} = Legion.start_link(MathAgent)
+      assert {:ok, "ok"} = Legion.call(pid, %{pid: self()})
+      assert Process.alive?(pid)
+
+      assert_received {:user_content, content}
+      assert content =~ inspect(self())
     end
   end
 
@@ -339,6 +349,20 @@ defmodule Legion.AgentServerTest do
       assert String.starts_with?(content, String.duplicate("a", 10))
       assert content =~ "[... truncated 40 bytes ...]"
     end
+
+    test "default of 20_000 applies when no override is given anywhere" do
+      Application.delete_env(:legion, :config)
+      on_exit(fn -> Application.delete_env(:legion, :config) end)
+
+      capture_user_content(self())
+
+      {:ok, pid} = Legion.start_link(MathAgent)
+      {:ok, _} = Legion.call(pid, String.duplicate("a", 25_000))
+
+      assert_received {:user_content, content}
+      assert String.starts_with?(content, String.duplicate("a", 20_000))
+      assert content =~ "[... truncated 5000 bytes ...]"
+    end
   end
 
   describe "cast/2" do
@@ -407,6 +431,37 @@ defmodule Legion.AgentServerTest do
       {:ok, pid} = Legion.start_link(ConversationBindingsAgent)
       {:ok, 42} = Legion.call(pid, "set x")
       assert {:ok, 43} = Legion.call(pid, "use x")
+    end
+
+    test "system prompt reflects binding_scope resolved from start_link opts, not agent.config()" do
+      {:ok, pid} = Legion.start_link(MathAgent, binding_scope: :conversation)
+      [%{role: "system", content: system_prompt} | _] = Legion.get_messages(pid)
+
+      assert system_prompt =~ "Variables also persist across turns"
+    end
+
+    test "system prompt reflects binding_scope resolved from Application config" do
+      Application.put_env(:legion, :config, %{binding_scope: :iteration})
+      on_exit(fn -> Application.delete_env(:legion, :config) end)
+
+      {:ok, pid} = Legion.start_link(MathAgent)
+      [%{role: "system", content: system_prompt} | _] = Legion.get_messages(pid)
+
+      assert system_prompt =~ "Variables do not persist."
+    end
+
+    test "custom system_prompt/0 override wins over the default" do
+      defmodule CustomPromptAgent do
+        @moduledoc "Agent with custom system prompt."
+        use Legion.Agent
+
+        def system_prompt, do: "completely custom prompt"
+      end
+
+      {:ok, pid} = Legion.start_link(CustomPromptAgent, binding_scope: :conversation)
+      [%{role: "system", content: system_prompt} | _] = Legion.get_messages(pid)
+
+      assert system_prompt == "completely custom prompt"
     end
   end
 end

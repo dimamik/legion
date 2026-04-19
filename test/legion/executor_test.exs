@@ -27,6 +27,13 @@ defmodule Legion.ExecutorTest do
     end
   end
 
+  defmodule ThirdPartyToolAgent do
+    @moduledoc "An agent exposing a third-party module as a tool."
+    use Legion.Agent
+
+    def tools, do: [Jason]
+  end
+
   defmodule DeeplyNestedAgent do
     @moduledoc "An agent with deeply nested output schema."
     use Legion.Agent
@@ -143,6 +150,18 @@ defmodule Legion.ExecutorTest do
       end)
 
       assert {:ok, "recovered"} = Legion.execute(MathAgent, "retry me")
+    end
+
+    test "third-party tool module without extra_allowed_modules/0 does not crash eval" do
+      stub(ReqLLM, :generate_object, fn _model, _messages, _schema ->
+        response(%{
+          "action" => "eval_and_complete",
+          "code" => "Jason.encode!(%{a: 1})",
+          "result" => ""
+        })
+      end)
+
+      assert {:ok, ~s({"a":1})} = Legion.execute(ThirdPartyToolAgent, "encode")
     end
 
     test "missing action field in LLM response triggers retry" do

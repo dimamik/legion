@@ -7,10 +7,18 @@ defmodule Legion.AgentPrompt do
   @external_resource @template_path
   @template EEx.compile_file(@template_path)
 
-  def system_prompt(agent) do
+  def system_prompt(agent, config \\ nil) do
+    if function_exported?(agent, :system_prompt, 0) do
+      agent.system_prompt()
+    else
+      build_system_prompt(agent, config || agent.config())
+    end
+  end
+
+  defp build_system_prompt(agent, config) do
     tool_contents = Enum.map(agent.tools(), &tool_description/1)
     description = agent.moduledoc()
-    binding_scope = Map.get(agent.config(), :binding_scope, :turn)
+    binding_scope = Map.get(config, :binding_scope, :turn)
 
     {result, _} =
       Code.eval_quoted(@template,

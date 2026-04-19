@@ -7,7 +7,7 @@ defmodule Legion.Integration.ResearchTest do
 
       mix test test/integration/research_test.exs --include integration
   """
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Legion.Test.Support.ResearchAgent
 

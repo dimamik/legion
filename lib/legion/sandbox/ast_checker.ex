@@ -3,7 +3,7 @@ defmodule Legion.Sandbox.ASTChecker do
   Static safety check for sandboxed code.
 
   Parses a code string into an AST and walks every node with `Macro.prewalk/3`,
-  rejecting the first violation found. Three categories of violations are checked:
+  rejecting the first violation found. Four categories of violations are checked:
 
   - **Forbidden forms** - language constructs that could escape the sandbox:
     `alias`, `import`, `require`, `use`, `quote`/`unquote`, `def`, `defp`,

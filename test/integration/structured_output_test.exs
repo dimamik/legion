@@ -7,7 +7,7 @@ defmodule Legion.Integration.StructuredOutputTest do
 
       mix test test/integration/structured_output_test.exs --include integration
   """
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   @moduletag :integration
   @moduletag timeout: 120_000

@@ -50,7 +50,7 @@ defmodule Legion.AgentServer do
       Vault.unsafe_put(tool, agent_module.tool_config(tool))
     end
 
-    system_prompt = agent_module.system_prompt()
+    system_prompt = Legion.AgentPrompt.system_prompt(agent_module, config)
 
     Telemetry.emit(
       [:legion, :agent, :started],
@@ -104,13 +104,10 @@ defmodule Legion.AgentServer do
     - `{:multipart, [ContentPart.t()]}` - mixed text/image/file content; build
       parts with `ReqLLM.Message.ContentPart.text/1`, `image/2`, `image_url/1`,
       `file/3`
-    - `struct` - `__struct__` and `__meta__` are dropped, then JSON-encoded
-    - `map | list` - JSON-encoded
-    - anything else - `inspect/2` fallback (lossy; prefer the shapes above)
+    - anything else - rendered via `inspect/2`
   """
   def handle_message(message, state) do
-    content =
-      message |> stringify() |> Executor.truncate_content(state.config[:max_message_length])
+    content = stringify(message, state.config[:max_message_length])
 
     {status, value, final_messages, final_bindings} =
       Telemetry.span(
@@ -136,35 +133,37 @@ defmodule Legion.AgentServer do
     {{status, value}, %{state | messages: final_messages, bindings: final_bindings}}
   end
 
-  defp stringify(message) when is_binary(message), do: message
+  defp stringify(message, max_length) when is_binary(message),
+    do: Executor.truncate_content(message, max_length)
 
-  defp stringify({:image, data, media_type}) when is_binary(data) and is_binary(media_type) do
+  defp stringify({:image, data, media_type}, _max_length)
+       when is_binary(data) and is_binary(media_type) do
     [ContentPart.image(data, media_type)]
   end
 
-  defp stringify({:image_url, url}) when is_binary(url) do
+  defp stringify({:image_url, url}, _max_length) when is_binary(url) do
     [ContentPart.image_url(url)]
   end
 
-  defp stringify({:multipart, parts}) when is_list(parts), do: parts
+  defp stringify({:multipart, parts}, _max_length) when is_list(parts), do: parts
 
-  defp stringify(%_{} = message) do
+  defp stringify(message, max_length) do
     message
-    |> Map.from_struct()
-    |> Map.drop([:__meta__])
-    |> Jason.encode!()
+    |> inspect(limit: :infinity)
+    |> Executor.truncate_content(max_length)
   end
-
-  defp stringify(message) when is_map(message) or is_list(message), do: Jason.encode!(message)
-
-  defp stringify(message), do: inspect(message, pretty: true, limit: :infinity)
 
   @known_config_keys ~w(binding_scope max_iterations max_message_length max_retries model sandbox_timeout)a
 
   defp resolve_config(agent_module, opts) do
     app_config = Application.get_env(:legion, :config, %{})
     call_config = Map.new(opts)
-    merged = Map.merge(app_config, Map.merge(agent_module.config(), call_config))
+
+    merged =
+      Executor.default_config()
+      |> Map.merge(app_config)
+      |> Map.merge(agent_module.config())
+      |> Map.merge(call_config)
 
     unknown = Map.keys(merged) -- @known_config_keys
 

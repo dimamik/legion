@@ -20,6 +20,9 @@ defmodule Legion.Executor do
     max_message_length: 20_000
   }
 
+  @doc false
+  def default_config, do: @default_config
+
   @action_descriptions %{
     "eval_and_continue" =>
       "Execute code and continue the turn. Use when you need the result before deciding the next step.",
@@ -208,8 +211,8 @@ defmodule Legion.Executor do
   defp eval_in_span(agent_module, code, config, bindings) do
     Telemetry.span([:legion, :sandbox, :eval], %{agent: agent_module, code: code}, fn ->
       tools = agent_module.tools()
-      extras = Enum.flat_map(tools, & &1.extra_allowed_modules())
-      allowed = tools ++ extras
+
+      allowed = tools ++ Enum.flat_map(tools, &extra_allowed_modules/1)
 
       case Sandbox.execute(code, config.sandbox_timeout, allowed, bindings) do
         {:ok, {value, new_bindings}} ->
@@ -219,6 +222,14 @@ defmodule Legion.Executor do
           {{:error, error}, %{success: false, error: error}}
       end
     end)
+  end
+
+  defp extra_allowed_modules(tool) do
+    if function_exported?(tool, :extra_allowed_modules, 0) do
+      tool.extra_allowed_modules()
+    else
+      []
+    end
   end
 
   defp handle_execution_error(agent_module, messages, config, error, iteration, retries, bindings) do

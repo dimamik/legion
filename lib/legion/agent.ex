@@ -28,8 +28,9 @@ defmodule Legion.Agent do
       keyword list. The returned options are accessible to the tool at runtime via
       `Vault.get(__MODULE__)`. Defaults to `[]` for all tools.
 
-    - `system_prompt/0` — the full system prompt sent to the LLM. Defaults to an
-      auto-generated prompt built from `@moduledoc` and tool source code.
+    - `system_prompt/0` — override to return a fully custom system prompt. When
+      not defined, the prompt is auto-generated from `@moduledoc`, tool source
+      code, and the resolved `binding_scope`.
 
     - `output_schema/0` — JSON Schema map describing the agent's structured output.
       Used by the LLM for the `result` field. Defaults to `%{"type" => "string"}`.
@@ -82,7 +83,6 @@ defmodule Legion.Agent do
       end
 
       def tools, do: []
-      def system_prompt, do: Legion.AgentPrompt.system_prompt(__MODULE__)
       def output_schema, do: %{"type" => "string"}
       def config, do: %{}
       def action_types, do: ~w(eval_and_continue eval_and_complete return done)
@@ -96,7 +96,6 @@ defmodule Legion.Agent do
       end
 
       defoverridable tools: 0,
-                     system_prompt: 0,
                      output_schema: 0,
                      config: 0,
                      action_types: 0
