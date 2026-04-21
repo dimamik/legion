@@ -98,7 +98,7 @@ Add `legion` to your dependencies:
 ```elixir
 def deps do
   [
-    {:legion, "~> 0.2"}
+    {:legion, "~> 0.3"}
   ]
 end
 ```

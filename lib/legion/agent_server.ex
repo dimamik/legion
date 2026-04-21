@@ -1,10 +1,10 @@
 defmodule Legion.AgentServer do
-  @moduledoc false
+  @moduledoc """
+  GenServer that maintains conversation history for a long-lived agent.
 
-  # GenServer that maintains conversation history for a long-lived agent.
-  #
-  # Holds the message history across multiple turns. Each `call` or `cast`
-  # appends the user message and runs `Executor` to completion (blocking).
+  Holds the message history across multiple turns. Each `call` or `cast`
+  appends the user message and runs `Executor` to completion (blocking).
+  """
 
   use GenServer
 

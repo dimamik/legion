@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.3.0 - 2026-04-21
+
+### Changes
+
+- Replace `share_bindings` boolean with `binding_scope` (`:iteration`, `:turn`, `:conversation`) for fine-grained control over variable lifetime across code executions
+- Add `action_types/0` callback to restrict which actions an agent can use (e.g. `~w(return done)` for read-only agents)
+- Add `max_message_length` config with truncation support to prevent unbounded message growth
+- Add multimedia message support: `{:image, data, media_type}`, `{:image_url, url}`, and `{:multipart, parts}`
+- Add `Legion.get_messages/1` to retrieve conversation history from a running agent
+- Expand `AgentTool` with `parallel/2`, `pipeline/1`, `then/3`, and `extra_allowed_modules/0` for sub-agent orchestration; sub-agents are auto-aliased in the sandbox
+- Generate dynamic `AgentTool.description/0` from sub-agent moduledocs
+- Move system prompt resolution to `AgentPrompt`, respecting custom `system_prompt/0` overrides
+- Validate config keys at startup with warnings for unknown keys
+- Add `@moduledoc` compile-time validation via `__before_compile__`
+- Harden sandbox: block `def`/`defp`/`__ENV__`, additional `:erlang` functions (`process_flag`, `list_to_atom`, `system_info`), catch throws and exits, surface compiler diagnostics on errors
+- Handle executor exceptions gracefully instead of crashing the agent loop
+- Add `Calendar` to sandbox safe-module list
+- Emit `:exception` telemetry events for iteration, LLM, and sandbox spans; use `System.convert_time_unit/3` for duration reporting
+- Extensive new test coverage for `AgentServer`, `Executor`, `Sandbox`, and `ASTChecker`
+
 ## v0.2.1 - 2026-03-24
 
 - Improve source code extraction for tool definitions
