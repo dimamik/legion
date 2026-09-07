@@ -55,10 +55,10 @@ defmodule Legion.RateLimiter do
       )
 
   A rule given without a `:policy` takes the default one. Rules belong to the
-  call site: the application config accepts  `:limiter` and `:default_policy`.
-  Rate limiting applies only when a limiter and at least  one rule resolve.
-  Rules without a limiter raise. A limiter without rules runs  the agent without
-  rate limiting and logs a warning - pass `rules: []` to opt  out on purpose
+  call site: the application config accepts `:limiter` and `:default_policy`.
+  Rate limiting applies only when a limiter and at least one rule resolve.
+  Rules without a limiter raise. A limiter without rules runs the agent without
+  rate limiting and logs a warning - pass `rules: []` to opt out on purpose
   and silence it. Unknown keys in either place are logged and ignored.
   Sub-agents inherit whatever their parent resolved - a parent started
   without rate limiting runs its whole subtree without it, and rules given
@@ -263,7 +263,7 @@ defmodule Legion.RateLimiter do
 
       {nil, _rules} ->
         raise ArgumentError,
-              "rate-limit rules need a limiter - pass `limiter:`, set " <>
+              "rate-limit rules need a limiter - pass `limiter: MyLimiter`, set " <>
                 "`config :legion, :rate_limit, limiter: MyLimiter`, or drop the rules " <>
                 "when the parent agent runs without rate limiting"
 
@@ -271,8 +271,8 @@ defmodule Legion.RateLimiter do
         unless explicit_rules? do
           Logger.warning(
             "#{inspect(limiter)} is configured but no rules were given, so this agent " <>
-              "runs without rate limiting; pass `rate_limit: [rules: [...]]`, or " <>
-              "`rate_limit: [rules: []]` to opt out on purpose"
+              "runs without rate limiting; pass `rules: [...]`, or `rules: []` to opt " <>
+              "out on purpose (as `rate_limit: [rules: ...]` when starting an agent)"
           )
         end
 
