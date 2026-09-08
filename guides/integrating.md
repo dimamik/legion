@@ -84,7 +84,8 @@ end
 
 The moduledoc is the agent's job description and becomes its system prompt.
 `config/0` overrides the global settings per agent - a cheaper model for a
-support bot, fewer iterations for a classifier. See `Legion.Agent`.
+support bot, fewer iterations for a classifier. The full key list is in
+[`Legion.Agent.config/0`](https://hexdocs.pm/legion/Legion.Agent.html#c:config/0).
 
 ## 4. Talk to it from where the shopper is
 
