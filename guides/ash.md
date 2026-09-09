@@ -96,7 +96,7 @@ relationship - and **private and `sensitive?` attributes**. Ash's `Inspect`
 redacts sensitive fields; the Lua boundary does not, and in the Elixir sandbox
 generated code can read any field of the struct directly.
 
-`Map.take(record, public_attribute_names)` fixes both the token cost and the
+`Map.take(record, @public_attributes)` fixes both the token cost and the
 leak. Add loaded relationships and calculations explicitly when the agent
 needs them.
 
